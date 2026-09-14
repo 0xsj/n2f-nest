@@ -1,0 +1,70 @@
+{
+  "language": "nest",
+  "caught": 7,
+  "selected": 7,
+  "exhaustive": false,
+  "evidence": ".",
+  "cases": [
+    {
+      "name": "allow_omitted",
+      "file": "src/shared/http/nest/server.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "0f1374e15f6bd757ae66c13d3e5d0ca8f62877c661be430f1e3f5e339b732b04"
+    },
+    {
+      "name": "duplicate_cookie_collapsed",
+      "file": "src/shared/http/feature.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "5509438b4b0633d2357ad1e87b28b770c5ed2caf153e525fd074c2aa1a0f8558"
+    },
+    {
+      "name": "admission_after_open",
+      "file": "src/shared/http/nest/server.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "0f1374e15f6bd757ae66c13d3e5d0ca8f62877c661be430f1e3f5e339b732b04"
+    },
+    {
+      "name": "header_allowlist_bypassed",
+      "file": "src/shared/http/feature.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "5509438b4b0633d2357ad1e87b28b770c5ed2caf153e525fd074c2aa1a0f8558"
+    },
+    {
+      "name": "admission_twice",
+      "file": "src/shared/http/nest/server.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "0f1374e15f6bd757ae66c13d3e5d0ca8f62877c661be430f1e3f5e339b732b04"
+    },
+    {
+      "name": "cookie_in_completion_log",
+      "file": "src/shared/http/nest/server.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "0f1374e15f6bd757ae66c13d3e5d0ca8f62877c661be430f1e3f5e339b732b04"
+    },
+    {
+      "name": "keyed_purpose_unbound",
+      "file": "src/shared/keyed/index.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "c3adfa85acca7203be1471dac8b5e74bdf0170b345302a2e8ebe422d4efc8739"
+    }
+  ],
+  "logs": [
+    "http_admission_after_open.log",
+    "http_admission_twice.log",
+    "http_allow_omitted.log",
+    "http_baseline.log",
+    "http_cookie_in_completion_log.log",
+    "http_duplicate_cookie_collapsed.log",
+    "http_header_allowlist_bypassed.log",
+    "http_keyed_purpose_unbound.log",
+    "http_restored.log"
+  ],
+  "verified_on": "2026-09-12"
+}

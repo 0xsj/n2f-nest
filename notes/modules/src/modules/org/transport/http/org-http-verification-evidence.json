@@ -1,0 +1,26 @@
+{
+  "date": "2026-09-14",
+  "language": "nest",
+  "command": "python3 tools/verify_auth_http.py",
+  "result": "passed",
+  "steps": 58,
+  "database": "PostgreSQL 18",
+  "organization_rows": 1,
+  "membership_rows": 2,
+  "invitation_rows": 1,
+  "coverage": [
+    "201 organization and owner projection",
+    "200 principal-scoped organization list",
+    "201 owner invitation for an active registered principal",
+    "409 pending invitation duplicate refusal",
+    "200 authenticated invitation acceptance and membership creation",
+    "409 invitation replay refusal",
+    "200 owner role promotion reflected to invitee",
+    "403 admin policy refusal and 400 owner-target protection",
+    "bounded invalid-list-query refusal",
+    "strict duplicate and owner-injection body refusal",
+    "Origin and CSRF refusal",
+    "unauthenticated session refusal",
+    "root active-principal eligibility wiring"
+  ]
+}

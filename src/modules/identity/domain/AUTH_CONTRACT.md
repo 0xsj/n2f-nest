@@ -1,7 +1,10 @@
 # Identity authentication contract
 
-**Stage:** specified. A01–A24 are not implemented or tested yet. Principal I01–I07
-remain the existing implementation. This contract is local to each blueprint.
+**Stage:** leaves implemented. The pure value and transition rules of A01–A02 and
+A04–A09 are implemented and tested per [AUTH_LEAF_SPEC.md](AUTH_LEAF_SPEC.md);
+A03 hashing, A05 token generation and A10–A24 are not implemented or tested yet.
+Principal I01–I07 remain the existing implementation. This contract is local to
+each blueprint.
 
 ## Credentials and login identifiers
 

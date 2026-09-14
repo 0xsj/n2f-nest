@@ -30,10 +30,11 @@ crash after commit cannot reconstruct the mail token. The initial policy is boun
 post-commit delivery plus resend, not durable mail retry. Adding recoverable encrypted
 mail jobs later would require an explicit secret-retention and key-ownership decision.
 
-**Limits:** these are design decisions and review findings, not tested runtime
-behavior. The contracts and scenario map are complete for this stage; auth leaves,
-crypto, database, browser, Mailpit and WebSocket verification remain future work.
-Prior principal mutation evidence is unchanged and is not evidence for auth.
+**Limits:** these are design decisions and review findings. The pure auth leaves
+are now implemented, with six selected mutations caught per build (see the
+[language walkthrough](auth-leaves-walkthrough.md)); crypto, database, browser,
+Mailpit and WebSocket verification remain future work. Leaf evidence says nothing
+about transaction, hashing or transport behavior.
 
 **Related:** [authentication plan](../../../../../../AUTHENTICATION.md)
 and [decision 0011](../../../../../../decisions/0011-identity-includes-credentials-and-revocable-sessions.md)

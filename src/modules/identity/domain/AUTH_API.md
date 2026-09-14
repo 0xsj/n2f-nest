@@ -1,7 +1,11 @@
 # Authentication leaf and capability map
 
-**Stage:** API design only. Names below are intended native shapes, not exported
-functions already available. AUTH_CONTRACT.md is the behavior authority.
+**Stage:** leaves and crypto adapters available. The first-leaf shapes below are exported and tested; PasswordHasher and TokenCodec are implemented as identity-owned adapters with
+local contracts; the application-owned capabilities below are declared as ports by
+the operations in [the application contract](../app/CONTRACT.md) and verified with
+fakes; concrete AuthStore, AttemptLimiter, EnrollmentPolicy, MailDelivery and
+upgrade-ticket adapters are implemented in the current composition. AUTH_CONTRACT.md
+is the behavior authority.
 
 ## First leaves, in dependency order
 
@@ -14,6 +18,7 @@ functions already available. AUTH_CONTRACT.md is the behavior authority.
 | auth_state | Principal security epoch and checked invalidation | AuthState |
 | session | Issue/restore/check/touch/revoke using explicit time and limits | Session, SessionSnapshot |
 | challenge | Issue/restore/consume/invalidate with purpose/version guards | Challenge, ChallengeSnapshot |
+| upgrade_ticket | Short-lived session-bound single-use WebSocket admission | UpgradeTicket, UpgradeTicketSnapshot |
 
 Constructors take explicit IDs/time/digests. No global clock, random generation,
 hashing, logging or database calls in these leaves. Session.Check evaluates session
@@ -52,8 +57,8 @@ operation budget and returns shared classified failures as distinct from its val
 
 | Capability | Intended operations / values |
 | --- | --- |
-| PasswordHasher | Hash(NewPassword) -> PasswordHash; Verify(PasswordInput, PasswordHash) -> Match or Mismatch; NeedsRehash(Hash) -> bool |
-| TokenCodec | Issue(Purpose) -> IssuedToken(secret, digest); Digest(Purpose, secret) -> TokenDigest |
+| PasswordHasher | Hash(NewPassword) -> PasswordHash; Verify(PasswordInput, PasswordHash) -> Match or Mismatch; VerifyAbsent(PasswordInput) -> Mismatch; NeedsRehash(Hash) -> bool. Implemented: [contract](../password-hash/CONTRACT.md) |
+| TokenCodec | Issue(Purpose) -> IssuedToken(secret, digest); Digest(Purpose, secret) -> TokenDigest. Implemented: [contract](../token-codec/CONTRACT.md) |
 | Clock / IDSource | Existing narrow wall-clock and ID generation capabilities |
 | EnrollmentPolicy | CheckBlocklist(NewPassword) -> allowed/refused; source failure distinct |
 | AttemptLimiter | Admit(operation, private subject key, trusted source key) -> permit/refusal/retry delay |

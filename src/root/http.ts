@@ -1,6 +1,6 @@
 import { All, Controller, Module, Req, Res } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { createServer } from 'node:http';
+import { createServer, type IncomingMessage } from 'node:http';
 import { isIP } from 'node:net';
 import type { Request, Response } from 'express';
 import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-hooks';
@@ -36,8 +36,17 @@ import {
 } from '../shared/telemetry/otel/runtime.js';
 import { OTelObserver } from '../shared/http/otel/observer.js';
 import { Server, type Route } from '../shared/http/nest/server.js';
+import { compose as composeAudit, migration as auditMigration, Runtime as AuditRuntime } from '../modules/audit/index.js';
+import { migration as identityMigration } from '../modules/identity/infra/postgres/index.js';
+import type { Config as BrokerConfig } from '../shared/events/jetstream/broker.js';
 import { loadConfig, type Config } from './config.js';
+import { composeAuth, loadAuthConfig, type AuthConfig } from './auth.js';
+import { upgradeTicketMigration } from '../modules/identity/infra/postgres/index.js';
+import { invitationMigration as orgInvitationMigration, migration as orgMigration } from '../modules/org/infra/postgres/index.js';
+import { WebSocketAdmission } from '../modules/identity/transport/http/index.js';
+import type { Var } from '../shared/env/index.js';
 import { logging } from './logging.js';
+import { parseTrustedProxies, trustedSource, type TrustedProxy } from './proxy.js';
 import {
   Database,
   type Config as DatabaseConfig,
@@ -54,6 +63,9 @@ export interface HTTPConfig {
   socketOrigin: string;
   outboundOrigin: string;
   database?: DatabaseConfig;
+  auth?: AuthConfig;
+  /** Every HTTP-process setting by name, secrets redacted (AUTH_BUILD.md). */
+  manifest: Var[];
   testRoutes: boolean;
   base: Config;
   host: string;
@@ -61,6 +73,10 @@ export interface HTTPConfig {
   timeoutMs: number;
   shutdownMs: number;
   telemetry: TelemetryConfig;
+  events: { transport: string; broker?: BrokerConfig; intervalMs: number };
+  auditEnabled: boolean;
+  auditConsumer: string;
+  trustedProxies: readonly TrustedProxy[];
 }
 export function loadHTTPConfig(lookup: Lookup): Result<HTTPConfig, Failure> {
   const base = loadConfig(lookup);
@@ -70,6 +86,7 @@ export function loadHTTPConfig(lookup: Lookup): Result<HTTPConfig, Failure> {
     socketOrigin: r.string('WS_ORIGIN', 'http://localhost:3000'),
     outboundOrigin: r.string('OUTBOUND_ORIGIN', ''),
     testRoutes: r.boolean('HTTP_TEST_ROUTES', false),
+    manifest: [],
     base: base.value,
     host: r.string('HTTP_HOST', '127.0.0.1'),
     port: r.int('HTTP_PORT', 7300, 0, 65535),
@@ -88,6 +105,10 @@ export function loadHTTPConfig(lookup: Lookup): Result<HTTPConfig, Failure> {
         'service.instance.id': 'validation',
       },
     },
+    events: { transport: 'postgres', intervalMs: 100 },
+    auditEnabled: false,
+    auditConsumer: 'audit',
+    trustedProxies: [],
   };
   if (r.boolean('DATABASE_ENABLED', false))
     c.database = {
@@ -95,14 +116,61 @@ export function loadHTTPConfig(lookup: Lookup): Result<HTTPConfig, Failure> {
       maxConnections: r.int('DATABASE_MAX_CONNECTIONS', 8, 1, 64),
       timeoutMs: r.int('DATABASE_TIMEOUT_MS', 1000, 1, 30000),
     };
+  if (r.boolean('AUTH_ENABLED', false)) c.auth = loadAuthConfig(r, lookup);
+  const eventsTransport = r.enumeration('EVENTS_TRANSPORT', 'postgres', [
+    'postgres',
+    'jetstream',
+  ]);
+  const eventsIntervalMs = r.int('EVENTS_INTERVAL_MS', 100, 10, 60000);
+  const eventsBroker =
+    eventsTransport === 'jetstream'
+      ? {
+          url: r.secret('NATS_URL'),
+          stream: r.string('NATS_STREAM', 'N2F_EVENTS'),
+          consumer: r.string('NATS_CONSUMER', 'mailbox'),
+          timeoutMs: r.int('NATS_TIMEOUT_MS', 1000, 1, 5000),
+        }
+      : undefined;
+  const auditEnabled = r.boolean('AUDIT_ENABLED', !!c.auth);
+  const auditConsumer = r.string('AUDIT_CONSUMER', 'audit');
+  const trustedProxies = parseTrustedProxies(
+    r.string('HTTP_TRUSTED_PROXIES', ''),
+  );
+  if (!trustedProxies.ok) return trustedProxies;
   const checked = r.check();
   if (!checked.ok) return checked;
+  if (c.auth && !c.database)
+    return err(
+      failure('invalid', 'AUTH_ENABLED requires DATABASE_ENABLED', {
+        type: 'env.invalid',
+        fields: { AUTH_ENABLED: 'requires_database' },
+      }),
+    );
+  if (auditEnabled && !c.auth)
+    return err(
+      failure('invalid', 'AUDIT_ENABLED requires AUTH_ENABLED', {
+        type: 'env.invalid',
+        fields: { AUDIT_ENABLED: 'requires_auth' },
+      }),
+    );
+  const manifest = r.manifest();
+  if (!manifest.ok) return manifest;
+  c.manifest = manifest.value;
   if (!isIP(c.host))
     return err(
       failure('invalid', 'invalid HTTP host', { type: 'env.invalid' }),
     );
   const valid = validate(c.telemetry);
-  return valid.ok ? ok(c) : valid;
+  if (!valid.ok) return valid;
+  c.events = {
+    transport: eventsTransport,
+    ...(eventsBroker ? { broker: eventsBroker } : {}),
+    intervalMs: eventsIntervalMs,
+  };
+  c.auditEnabled = auditEnabled;
+  c.auditConsumer = auditConsumer;
+  c.trustedProxies = trustedProxies.value;
+  return ok(c);
 }
 export async function startHTTP(
   lookup: Lookup,
@@ -174,6 +242,62 @@ export async function startHTTP(
     database = opened.value;
   }
   const gate = new Gate(500, database ? [() => database!.ping()] : []);
+  let authManifest: Readonly<Record<string, string | number>> = {};
+  const authRoutes: Route[] = [];
+  let auditRuntime: AuditRuntime | undefined;
+  let socketAuthorize: ((request: IncomingMessage) => Promise<Result<unknown, Failure>>) | undefined;
+  let socketRevalidate: ((admitted: unknown) => Promise<Result<void, Failure>>) | undefined;
+  if (c.auth && database) {
+    const composed = await composeAuth(c.auth, {
+      database,
+      clock,
+      ids,
+      host: c.host,
+      log: log.log,
+      ...(c.auditEnabled ? { auditSchema: auditMigration(4) } : {}),
+    });
+    if (!composed.ok) {
+      log.log.withError(composed.error).error('auth.composition_failed');
+      await database.close(c.shutdownMs);
+      observer.close();
+      await telemetry.close(c.shutdownMs);
+      await log.close(c.shutdownMs);
+      throw new Error('authentication composition failed');
+    }
+    authRoutes.push(...composed.value.routes);
+    socketAuthorize = composed.value.socketAuthorize;
+    socketRevalidate = composed.value.socketRevalidate;
+    authManifest = composed.value.manifest;
+    if (c.auditEnabled) {
+      const audit = await composeAudit(
+        database,
+        { intervalMs: c.events.intervalMs, ...(c.events.broker ? { broker: c.events.broker } : {}) },
+        composed.value.requireSession,
+        c.auditConsumer,
+        clock,
+        log.log,
+        identityMigration(2),
+        upgradeTicketMigration(5),
+        orgMigration(6),
+        orgInvitationMigration(7),
+      );
+      if (!audit.ok) {
+        log.log.withError(audit.error).error('audit.composition_failed');
+        await database.close(c.shutdownMs);
+        observer.close();
+        await telemetry.close(c.shutdownMs);
+        await log.close(c.shutdownMs);
+        throw new Error('audit composition failed');
+      }
+      authRoutes.push(audit.value.route);
+      auditRuntime = audit.value.runtime;
+    }
+  }
+  log.log.info('http.manifest', {
+    config: c.manifest,
+    'auth.enabled': !!c.auth,
+    ...(c.auth ? authManifest : {}),
+  });
   const outboundNative = c.outboundOrigin
     ? value(
         NativeClient.create({
@@ -302,20 +426,23 @@ export async function startHTTP(
         },
       },
     );
+  routes.push(...authRoutes);
   const adapter = new Server({
     routes,
     observer,
     log: log.log,
+    source: (remoteAddress, headers) =>
+      trustedSource(c.trustedProxies, remoteAddress, headers),
     now: () => clock.elapsed(),
     timeoutMs: c.timeoutMs,
     maxBody: 1 << 20,
     maxActive: 64,
-    open: (name, incoming) =>
+    open: (name, incoming, admitted) =>
       factory.enter(
         {
           origin: 'request',
           operation: value(operation(name)),
-          attribution: at,
+          attribution: admitted,
           executor,
         },
         incoming,
@@ -340,12 +467,20 @@ export async function startHTTP(
     { maxHeaderSize: 16384, connectionsCheckingInterval: 100 },
     app.getHttpAdapter().getInstance(),
   );
-  const sockets = new SocketServer(c.socketOrigin, () => {
+  const sockets = new SocketServer(c.socketOrigin, (admitted) => {
+    let socketAt = at;
+    if (admitted instanceof WebSocketAdmission) {
+      const initiator = actor('user', admitted.principal.principalId);
+      if (!initiator.ok) return initiator;
+      const attributed = attribution({ initiator: initiator.value });
+      if (!attributed.ok) return attributed;
+      socketAt = attributed.value;
+    }
     const connection = factory.enter(
       {
         origin: 'request',
         operation: value(operation('socket.connection')),
-        attribution: at,
+        attribution: socketAt,
         executor,
       },
       inspectIncoming({}),
@@ -376,7 +511,7 @@ export async function startHTTP(
       },
       close: () => connectionLog.info('socket.connection.closed'),
     });
-  });
+  }, socketAuthorize, socketRevalidate);
   server.on('upgrade', (req, socket, head) => {
     if (req.url !== '/_examples/socket') {
       socket.destroy();
@@ -396,6 +531,7 @@ export async function startHTTP(
       });
     });
   } catch {
+    await auditRuntime?.close(c.shutdownMs);
     await database?.close(c.shutdownMs);
     outboundNative?.close();
     observer.close();
@@ -404,6 +540,7 @@ export async function startHTTP(
     await app.close();
     throw new Error('HTTP startup failed');
   }
+  auditRuntime?.start();
   gate.start();
   const address = server.address();
   diagnostic(
@@ -436,6 +573,7 @@ export async function startHTTP(
         clearTimeout(timer);
         await adapter.drain(remaining());
         outboundNative?.close();
+        await auditRuntime?.close(remaining());
         if (database && !(await database.close(remaining())).ok)
           diagnostic('database shutdown incomplete\n');
         const flushed = await telemetry.close(remaining());

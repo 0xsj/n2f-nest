@@ -1,5 +1,326 @@
 # Status
 
+## 2026-09-14 — Organization invitations and role transitions
+
+The organization domain and application workflows are implemented and mirrored
+across all three builds. O01–O10 cover validated organization names and times,
+separate membership values, invitation lifecycle state, closed roles, explicit
+initial-owner construction, history-preserving restore and snapshot ownership.
+`CreateOrganization` and `InviteMember` use org-owned active-eligibility ports;
+session admission and principal IDs remain composition-root concerns.
+
+`pnpm exec vitest run src/modules/org/domain/org.spec.ts src/modules/org/app/app.spec.ts`
+and `pnpm run build` passed under Node 24. Migration 7 adds the membership
+uniqueness key and invitation table. PostgreSQL locks actor/invitation/target rows
+as appropriate: invitation creation enforces owner/admin policy, acceptance
+atomically creates membership and marks the invite accepted, and role changes
+allow owner→admin/member or admin→member while protecting self and owner targets.
+The root-composed routes retain session, Origin, CSRF and principal-scoped GET
+admission. The 58-step real-process verifier passes against PostgreSQL 18,
+Mailpit and the live service: owner invitation, invitee acceptance, replay
+refusal, promotion and admin/owner guards produce one organization row and two
+memberships. `tools/org.http` and `tools/run_org_curls.py` provide editor and
+curl workflows for the same routes.
+
+## 2026-09-13 — WebSocket upgrade-ticket admission
+
+The stage 8 WebSocket ticket slice is implemented, uncommitted and aligned in
+all three builds. Migration 5 stores only a purpose-bound digest with a
+30-second maximum lifetime. `POST /v1/auth/websocket-ticket` is session,
+Origin and CSRF protected; the native upgrade boundary requires the session
+cookie, allowed Origin, `n2f.v1` and one `n2f.ticket.<ticket>` value, then
+atomically consumes the ticket while rechecking principal status, session and
+auth epoch. The admitted socket receives only the safe principal projection;
+identity retains the private session proof and revalidates it before each
+authenticated message and every heartbeat, closing revoked/expired sockets.
+
+`tools/verify_auth_http.py` passed end to end against PostgreSQL 18 and Mailpit
+in Go, Rust and Nest: ticket issuance, 101 upgrade, ping/pong, single-use replay
+refusal, logout/recovery, outbox counts and redaction. The same live run now
+proves an already-open socket refuses its next message after HTTP logout. Go
+compile/test discovery, Rust check/test compilation and Nest TypeScript checking
+passed. Full ordinary suites remain subject to the existing sandbox loopback
+restriction. A source/verifier redaction review found no additional
+secret-bearing gap.
+
+## 2026-09-13 — Shared Redis limiter and trusted proxy policy
+
+Stage 7b is implemented, uncommitted. Root selects the existing AttemptLimiter
+port's process-local adapter by default or the Redis adapter with AUTH_LIMITER.
+The Redis path uses one atomic subject/source script, HMAC-derived digest fields,
+bounded live state, expiry eviction and fail-closed dependency handling.
+HTTP_TRUSTED_PROXIES is root-owned and only accepts forwarded chains from a
+configured IP/CIDR peer; malformed chains fall back to the canonical peer.
+
+tools/verify_limiter.py passed against PostgreSQL 18, Redis 8 and Mailpit with
+two independent HTTP processes: ten distributed 401 login failures followed by
+a shared 429. Redis state contained digest fields only and the limiter URL,
+email, password and CSRF key were absent from process output. Node 24 source
+syntax checks passed. The live comparison caught and corrected the Nest RESP
+framing defect in the Redis adapter. The installed TypeScript check remains
+blocked by missing local @types/node and vitest/globals packages.
+
+The selected live Redis mutation run caught 3/3 named faults (subject
+threshold, raw-subject digest and boundary comparison) in an isolated copy.
+
+Next: org application and persistence. Full ordinary-suite evidence remains.
+
+## 2026-09-13 — Audit ingestion boundary and authenticated read route
+
+The first audit slice of stage 8 is implemented, uncommitted. The shared
+PostgreSQL mailbox now uses `(event_id, consumer)` receipts, and the root HTTP
+process dispatches identity outbox facts and consumes them through either the
+PostgreSQL path or the JetStream path selected at composition time. The audit
+record and its receipt commit together; six identity event types are translated
+without importing identity internals. `GET /v1/audit/records` is authenticated,
+bounded to 1–100 records (default 50), and preserves occurred versus recorded
+time. See [audit contract](src/modules/audit/CONTRACT.md).
+
+Node 24 source syntax checks passed. The real process verifier
+'tools/verify_audit.py' passed against PostgreSQL 18 and JetStream: the
+authenticated read route, bounds, timestamps, redaction and three processed
+audit receipts passed in both transport modes. The selected live audit mutation
+run caught 3/3 named faults (timestamp replacement, receipt consumer scope and
+action projection) in an isolated copy. TypeScript verification is currently
+blocked by missing local `@types/node` and `vitest/globals` packages; the full
+ordinary suite remains.
+
+## 2026-09-12 — Mail delivery completes the browser workflow
+
+Completed the mail delivery half of stage 7 of the [auth build order](AUTHENTICATION.md).
+An identity-owned SMTP adapter ([contract](src/modules/identity/infra/smtp/CONTRACT.md)) sends verification
+and reset messages whose link carries the token only in the fragment, bounds each
+attempt with one timeout, reports delivered only when the server accepts the
+message, and logs one safe outcome per attempt. Root selects it when
+`AUTH_SMTP_HOST` is set and keeps the undelivered adapter otherwise; a password
+configured without a username refuses startup. Verification and reset requests
+now withhold challenges and mail from a principal that is not active while still
+answering accepted, so suspension is not disclosed.
+
+Verified: `tools/verify_auth_http.py` now starts Mailpit beside PostgreSQL 18 and
+walks the whole browser flow through this build's real process in 31 steps: one
+verification mail; verification refused with a wrong password, accepted, then
+refused on replay; login with the session cookie and no token in the body;
+session, logout, and session refused; a reset request that mails a reset link and
+an unknown-email request that mails nothing; the reset, the old password refused
+and the new one accepted; outbox counts of one registration, one verification,
+one logout revocation, one password change, one all-sessions revocation and two
+session creations; and redaction of every mailed token and session cookie value.
+Full ordinary suites and static checks passed. Six selected mutations (token in
+query, delivered on rejection, timeout ignored, token in log, expiry omitted,
+mail to a suspended principal) were caught in an isolated copy by
+`tools/mutations/auth_mail.py`; not a score. See
+[SMTP notes and evidence](notes/modules/src/modules/identity/infra/smtp/README.md).
+
+Corrections worth retaining: nodemailer's timeouts each cover one phase, so a
+stalled server could hold an attempt for several budgets; an outer timer enforces
+the single bound. A transport is created per message so the revealed SMTP
+password does not live in long-held options. `new URL(x).origin === x` validates
+the link origin in one comparison. nodemailer 10.0.9 was younger than pnpm's
+default minimum release age and pnpm silently wrote a `pnpm-workspace.yaml`
+exclusion instead of refusing; the exclusion was deleted and 10.0.8, which also
+bundles its types, is pinned instead.
+
+Unverified: implicit TLS, STARTTLS and SMTP authentication against a real remote
+server; the suspended-principal path through HTTP, since no suspension route
+exists (the application spec covers it). There is no mail retry or durable mail
+queue, as A15 allows. Next, in the agreed order: audit, with outbox dispatch and a
+consumer lifecycle in the auth process; then the shared Redis limiter with a
+trusted-proxy policy and a redaction review; then WebSocket upgrade tickets.
+
+## 2026-09-12 — Login surface: HTTP extension, transport and root composition
+
+Completed stage 6 of the [auth build order](AUTHENTICATION.md). The shared HTTP
+boundary gained feature routes (H15–H19 of its contract): per-route methods with
+a real Allow set, bounded raw bodies, selected headers, parsed cookies that keep
+duplicates visible, a response value with allowlisted headers and Set-Cookie,
+headers-carrying refusals, and a route admission step that runs after routing
+and before the provenance scope opens, so an authenticated principal becomes the
+scope's initiator. A shared keyed digest (HMAC-SHA256 over text keys) serves
+CSRF signing and rate-limit subjects. The identity transport registers eleven
+routes under `/v1/auth` with `__Host-` cookies, an exact origin allowlist, a
+signed double-submit CSRF context bound to the session digest, strict JSON
+decoding and enumeration-safe responses ([contract](src/modules/identity/transport/http/CONTRACT.md)). Local
+adapters (process-local limiter, file blocklist, undelivered mail) let root
+compose a runnable process per [AUTH_BUILD.md](AUTH_BUILD.md): `AUTH_ENABLED=true`
+applies the ledger, wires store, hasher, codec, keyed digest, limiter, blocklist,
+operations and transport, and prints a redacted manifest.
+
+Verified: `tools/verify_auth_http.py` ran this build's real process against
+PostgreSQL 18 through every step (manifest, CSRF issue, origin and CSRF
+refusals, malformed and blocklisted bodies, register and duplicate 202,
+identical login refusals, session 401, idempotent logout, 429 with Retry-After,
+one outbox registration row, readiness, clean SIGTERM exit, redaction, completion
+logs). Shared and identity suites, the full ordinary suite, the build's static
+checks and the diagnostic HTTP verifier in mode none passed. Selected mutations:
+seven for the HTTP extension and keyed digest (`tools/mutations/auth_http.py`)
+and nine for the transport and local adapters
+(`tools/mutations/auth_transport.py`), caught in isolated copies in every build,
+48/48 across the comparison; not a score. See
+[transport notes and evidence](notes/modules/src/modules/identity/transport/http/README.md), [local adapters](notes/modules/src/modules/identity/infra/local/README.md),
+[keyed digest](notes/modules/src/shared/keyed/README.md), [feature routes](notes/modules/src/shared/http/feature-routes.md) and [root composition](notes/modules/src/root/auth-composition.md).
+
+Corrections worth retaining: provenance fixes attribution at scope entry, so
+session admission must precede Open, and a refused admission still opens an
+`http.admission` scope. Refusals needed to be values carrying headers and
+cookies (a 401 that clears the cookie, a 429 with Retry-After); the boundary
+contract now records that extension. The keyed fixture generated from raw bytes
+held a key no text-keyed language could construct; keys are UTF-8 text by
+contract now. Logout answers 204 and cannot return the rotated CSRF token, so
+clients fetch `GET /csrf` next. Strict JSON needed its own parsing where the
+standard decoder keeps the last duplicate key silently.
+
+No mail is delivered, so verification and login after verification cannot yet
+complete from a browser; the rate limiter is process-local and the source key is
+the peer address without a trusted-proxy policy. Stage 7, Mailpit delivery, the
+shared Redis limiter, redaction review and the full browser workflow, is next.
+
+## 2026-09-12 — Identity PostgreSQL store against the real database
+
+Completed stage 5 of the [auth build order](AUTHENTICATION.md): the identity
+migration and the concrete store behind every stage 4 port, under a
+[local contract](src/modules/identity/infra/postgres/CONTRACT.md). Each mutation is one shared-package
+transaction that locks auth state, principal, credential and then session or
+challenge, rechecks under lock, writes with guarded updates and affected-row
+checks, and enqueues its envelopes on the same transaction. Duplicate canonical
+emails are recognized by constraint name inside the callback because the shared
+error mapping redacts it afterwards; refusals that must roll back leave the
+callback as a private marker and are settled to values after rollback; Resolve
+learns a digest's owner unlocked, locks in order, re-reads, and latches an
+observed expiry as the one refusal that commits.
+
+Real PostgreSQL 18 checks passed in every build through the owned disposable
+database of `tools/verify_identity_store.py`: register round trip with absent
+timestamps, duplicate after rollback with no rows, eight-way same-email
+registration with one winner, each stale login condition, admitted touch, idle
+deadline equality, backward time, epoch mismatch, revoke-before-resolve, eight-way
+challenge consumption with one winner, reissue invalidating an expired challenge,
+stale verification, password change bumping the epoch and invalidating
+challenges, reset setting verification, complete rollback on enqueue failure and
+outbox rows without private data. Go 11 subtests, Rust one scenario target, Nest
+15 cases; full ordinary suites, race/vet, clippy/fmt and lint/type/build (Node 24)
+passed with the integration tests skipped or ignored. Six selected mutations per
+build (duplicate as failure, stale login ignored, unguarded consume, backward
+time admitted, unguarded revoke-all, dropped events) were caught against fresh
+databases in isolated copies by the shared `tools/mutations/auth_store.py`,
+18/18. Not a score. See [mirrored notes and evidence](notes/modules/src/modules/identity/infra/postgres/README.md).
+
+Environment: Docker's VM disk filled during the run; unused images were pruned
+(no volumes or containers) and the Nest and Rust builds first ran on a temporary
+PostgreSQL 16 stand-in, then were rerun on PostgreSQL 18 once space returned. The
+stand-ins are stopped. Uncertain commit is not reproduced; the store passes the
+shared `database.commit_uncertain` classification through, and lock-order
+deadlock freedom beyond the two eight-way races is not proven.
+
+Root does not yet compose the store, hasher, codec or operations into a process;
+no HTTP, cookie, CSRF, mail or rate-limit adapter exists. Stage 6, extending the
+bounded HTTP surface and adding auth routes, is next.
+
+## 2026-09-12 — Identity application operations against fakes
+
+Completed stage 4 of the [auth build order](AUTHENTICATION.md): register,
+verification request, email verification, login, authenticate, logout, logout-all,
+password change, reset request and password reset as application operations under
+a [local contract](src/modules/identity/app/CONTRACT.md). Every capability is a consumer-declared port
+with explicit outcomes (created/duplicate, found/absent, committed/stale,
+admitted/rejected/absent, delivered or not), one store adapter narrowed per
+operation, and safe outbox envelopes built before the store call so the store owns
+whether they apply. Post-commit mail never runs after a stale or uncertain commit;
+refused attempts emit no event; unknown logins still pay the dummy verification.
+
+Suites passed with fakes and recorded call order: the Go command and query
+packages, 13 Rust tests and 29 Nest cases. Full ordinary suites, Go race/vet, Rust
+clippy with warnings denied and fmt, and Nest lint/type/build under Node 24 passed.
+Six selected mutations per build (enumeration leak, duplicate replaces credential,
+mail after uncertain commit, verification without password proof, stale commit as
+success, private data in an event) were caught in isolated copies by the shared
+`tools/mutations/auth_app.py`, 18/18. Not a score. See
+[mirrored notes and evidence](notes/modules/src/modules/identity/app/README.md).
+
+Alignment worth retaining: Email is parsed before rate-limit admission because the
+canonical email is the limiter subject, and token operations use the digest hex.
+A Nest fake codec that ignored purpose hid exactly the confusion T03 forbids and
+was fixed. Rust clippy's await-holding-lock check ignores explicit drops, so guarded
+assertions are scoped. Principal status is enforced by the store recheck; the
+builds' optional pre-checks differ and the contract now records that (U17). Rust's
+common domain bounds became public for the application layer.
+
+The transaction, lock and concurrency promises named per store port are stage 5
+obligations. No PostgreSQL adapter, mail transport, rate limiter, HTTP or cookie
+handling exists. Stage 5, migrations and concrete atomic operations, is next.
+
+## 2026-09-12 — Password hashing and token codec adapters
+
+Completed stage 3 of the [auth build order](AUTHENTICATION.md): identity-owned
+PasswordHasher and TokenCodec adapters with local contracts
+([hashing](src/modules/identity/password-hash/CONTRACT.md), [tokens](src/modules/identity/token-codec/CONTRACT.md)) and cross-language vectors
+generated once and copied verbatim into each build. Argon2id v19, m=19456, t=2,
+p=1 in PHC form; the read allowlist is exactly the write format, compared as text
+before any hashing call; verification compares in constant time; an absent
+credential runs the same work against a fixed dummy record; admission bounds
+concurrency and queueing per adapter with saturation, queue-timeout and (Go/Node)
+cancellation refusals, and admitted work completes past a deadline. Tokens are 32
+entropy bytes as 43 canonical base64url characters, digested by SHA-256 over
+purpose, a zero byte and the raw bytes.
+
+Node 24's built-in `crypto.argon2` (per `.nvmrc`; `engines` added) reproduced the
+Go-generated hashes. Rust added `argon2` 0.6.0 and `subtle` 2.6.1 and moved its
+entropy capability from `id` into `shared::entropy` with re-exports. Go promoted
+`golang.org/x/crypto` to a direct dependency.
+
+Adapter suites passed: 11 Go tests, 15 Rust tests, 58 Nest cases. Full ordinary
+suites, Go race/vet, Rust clippy with warnings denied and fmt, and Nest lint/type/
+build checks passed under Node 24. Seven selected mutations per build (parameter
+allowlist, mismatch as corruption, dummy leak, saturation, purpose binding,
+non-canonical acceptance, entropy fallback) were caught in isolated copies by the
+shared `tools/mutations/auth_adapters.py`, 21/21. These are targeted checks, not a
+score. See [mirrored notes and evidence](notes/modules/src/modules/identity/adapter-mutation-evidence.json).
+
+Corrections worth retaining: Go's strict base64url decoder and Rust's default
+engine already reject non-zero trailing bits, so the contract's re-encode rule is
+observable only with a permissive decode and is defense in depth there. Rust
+current-thread tokio tests deadlock on std blocking waits; admission tests use the
+multi-thread flavor. A hand-typed dummy record passed H05 because the comparison is
+discarded; the specs now pin it to the fixture. The contracts gained Internal
+`identity.hash_failed` for lost blocking work and now name the native test seams;
+Rust cannot reach the T01/T06 refusals by construction.
+
+Nothing consumes these adapters yet; no application operation, storage, HTTP,
+mail or rate limiting exists. Stage 4, the application operations with fake
+consumer-owned ports, is next.
+
+## 2026-09-12 — Auth leaves implemented
+
+Completed stage 2 of the [auth build order](AUTHENTICATION.md): the executable
+leaf specs written this morning now pass in every build. Email, enrollment/login
+password, token purpose/digest, credential, auth epoch, session and challenge are
+pure values and transitions following the [leaf decisions](src/modules/identity/domain/AUTH_LEAF_SPEC.md);
+the refusing scaffolds are deleted. Bounds, refusal classification and transition
+order agree across the builds: revoke/invalidate before stored activity, bad clocks
+and TTL overflow are Invalid; revoked, expired, backward, wrong-purpose,
+stale-version and terminal use are Unauthenticated; Touch checks the session
+before validating its TTL.
+
+Auth suites passed: 13 Go tests over the 51 shared fixture cases, 12 Rust tests and
+63 Nest cases. Full ordinary suites, Go race/vet, Rust clippy with warnings denied
+and fmt, and Nest lint/type/build checks passed; explicit DB/broker tests were
+skipped or ignored as before. Six selected mutations per build (expiry equality,
+purpose confusion, replay, stale version, missing revocation check, secret
+disclosure) were caught in isolated copies by the shared `tools/mutations/auth.py`,
+18/18 across the comparison. These are implementation-visible targeted checks, not
+a score. See [mirrored notes and evidence](notes/modules/src/modules/identity/domain/auth-leaves-walkthrough.md).
+
+Corrections worth retaining: the Go red-stage helper compared the public error
+type, which redacts Internal by design, so the credential-corruption case was
+unsatisfiable until the helper switched to the diagnostic accessor. Nest's
+`String.prototype.isWellFormed` passed under vitest but not the ES2023 type check
+and was replaced by a code-point scan. Rust cannot exercise the malformed-UTF-8
+fixture because `String` is valid by construction. Go made `golang.org/x/text` a
+direct dependency and Rust added `unicode-normalization` 0.1.25 for NFC.
+
+No hashing, token generation, application operations, persistence, HTTP, mail or
+WebSocket behavior exists. Stage 3, the PasswordHasher and TokenCodec adapters, is next.
+
 ## 2026-09-12 — Built-in authentication contract
 
 Corrected baseline scope: identity includes authentication, without an account/profile

@@ -2,7 +2,7 @@ import { it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { Broker } from './broker.js';
 import { Envelope, type Publisher } from '../index.js';
-import { Store, Mailbox, migration, enqueue } from '../postgres/store.js';
+import { Store, Mailbox, migration, receiptsMigration, enqueue } from '../postgres/store.js';
 import { Database } from '../../postgres/index.js';
 import { SecretString } from '../../secret/index.js';
 import { parse } from '../../id/index.js';
@@ -43,6 +43,7 @@ it.skipIf(!process.env.N2F_TEST_NATS_URL || !process.env.N2F_TEST_DATABASE_URL)(
             version: 2,
             sql: 'CREATE TABLE jetstream_effect(id uuid PRIMARY KEY)',
           },
+          receiptsMigration(3),
         ]),
       );
       value(await broker.provision());
@@ -97,7 +98,7 @@ it.skipIf(!process.env.N2F_TEST_NATS_URL || !process.env.N2F_TEST_DATABASE_URL)(
       let calls = 0;
       expect(
         value(
-          await mailbox.consume(async (tx, e) => {
+          await mailbox.consume('jetstream', async (tx, e) => {
             calls++;
             await tx.query('INSERT INTO jetstream_effect VALUES($1)', [e.id]);
             return ok(undefined);
@@ -107,7 +108,7 @@ it.skipIf(!process.env.N2F_TEST_NATS_URL || !process.env.N2F_TEST_DATABASE_URL)(
       value(await mailbox.publish(event));
       expect(
         value(
-          await mailbox.consume(async () => {
+          await mailbox.consume('jetstream', async () => {
             calls++;
             return ok(undefined);
           }),
@@ -128,7 +129,7 @@ it.skipIf(!process.env.N2F_TEST_NATS_URL || !process.env.N2F_TEST_DATABASE_URL)(
       expect(large.bytes().length).toBe(65536);
       value(await broker.publish(large));
       expect(value(await broker.transfer(mailbox))).toBe(true);
-      expect(value(await mailbox.consume(async () => ok(undefined)))).toBe(
+      expect(value(await mailbox.consume('jetstream', async () => ok(undefined)))).toBe(
         true,
       );
       value(await db.transaction((tx) => enqueue(tx, large)));

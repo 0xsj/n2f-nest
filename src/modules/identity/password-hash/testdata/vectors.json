@@ -1,0 +1,167 @@
+{
+  "dummy_record": "$argon2id$v=19$m=19456,t=2,p=1$gIGCg4SFhoeIiYqLjI2Ojw$hCpNSDRlggIY1L1+l6kN4tcjdR+eIOW4qSmc8vLLUXg",
+  "hashes": [
+    {
+      "name": "ascii",
+      "password": "correct horse battery staple",
+      "phc": "$argon2id$v=19$m=19456,t=2,p=1$AAECAwQFBgcICQoLDA0ODw$gYJZtjEAJqjg26xdLmknq8/bB7MiWPrE9hsYuA+SkIU",
+      "salt_hex": "000102030405060708090a0b0c0d0e0f"
+    },
+    {
+      "name": "nfc_spaces",
+      "password": "pässwörd with spaces here ",
+      "phc": "$argon2id$v=19$m=19456,t=2,p=1$EBESExQVFhcYGRobHB0eHw$cpD5FWOxqRSJln4ztGd9fsuMpnxPAEJJK0+M7elnXq0",
+      "salt_hex": "101112131415161718191a1b1c1d1e1f"
+    },
+    {
+      "name": "emoji",
+      "password": "🌱 seed phrase twelve words 🌱",
+      "phc": "$argon2id$v=19$m=19456,t=2,p=1$ICEiIyQlJicoKSorLC0uLw$Noh/WfDG3XRYkyfdC6KboQwv6shY7F0HFqgh8/De/jM",
+      "salt_hex": "202122232425262728292a2b2c2d2e2f"
+    }
+  ],
+  "verify": [
+    {
+      "name": "match",
+      "outcome": "match",
+      "password": "correct horse battery staple",
+      "record": "$argon2id$v=19$m=19456,t=2,p=1$AAECAwQFBgcICQoLDA0ODw$gYJZtjEAJqjg26xdLmknq8/bB7MiWPrE9hsYuA+SkIU"
+    },
+    {
+      "name": "wrong_password",
+      "outcome": "mismatch",
+      "password": "correct horse battery staple!",
+      "record": "$argon2id$v=19$m=19456,t=2,p=1$AAECAwQFBgcICQoLDA0ODw$gYJZtjEAJqjg26xdLmknq8/bB7MiWPrE9hsYuA+SkIU"
+    },
+    {
+      "name": "case_differs",
+      "outcome": "mismatch",
+      "password": "CORRECT HORSE BATTERY STAPLE",
+      "record": "$argon2id$v=19$m=19456,t=2,p=1$AAECAwQFBgcICQoLDA0ODw$gYJZtjEAJqjg26xdLmknq8/bB7MiWPrE9hsYuA+SkIU"
+    },
+    {
+      "name": "dummy_record_is_real",
+      "outcome": "match",
+      "password": "n2f-absent-credential-dummy-2026-09-12",
+      "record": "$argon2id$v=19$m=19456,t=2,p=1$gIGCg4SFhoeIiYqLjI2Ojw$hCpNSDRlggIY1L1+l6kN4tcjdR+eIOW4qSmc8vLLUXg"
+    },
+    {
+      "name": "empty",
+      "outcome": "corrupt",
+      "password": "correct horse battery staple",
+      "record": ""
+    },
+    {
+      "name": "argon2i",
+      "outcome": "corrupt",
+      "password": "correct horse battery staple",
+      "record": "$argon2i$v=19$m=19456,t=2,p=1$AAECAwQFBgcICQoLDA0ODw$gYJZtjEAJqjg26xdLmknq8/bB7MiWPrE9hsYuA+SkIU"
+    },
+    {
+      "name": "argon2d",
+      "outcome": "corrupt",
+      "password": "correct horse battery staple",
+      "record": "$argon2d$v=19$m=19456,t=2,p=1$AAECAwQFBgcICQoLDA0ODw$gYJZtjEAJqjg26xdLmknq8/bB7MiWPrE9hsYuA+SkIU"
+    },
+    {
+      "name": "version_16",
+      "outcome": "corrupt",
+      "password": "correct horse battery staple",
+      "record": "$argon2id$v=16$m=19456,t=2,p=1$AAECAwQFBgcICQoLDA0ODw$gYJZtjEAJqjg26xdLmknq8/bB7MiWPrE9hsYuA+SkIU"
+    },
+    {
+      "name": "memory_huge",
+      "outcome": "corrupt",
+      "password": "correct horse battery staple",
+      "record": "$argon2id$v=19$m=4194304,t=2,p=1$AAECAwQFBgcICQoLDA0ODw$gYJZtjEAJqjg26xdLmknq8/bB7MiWPrE9hsYuA+SkIU"
+    },
+    {
+      "name": "memory_small",
+      "outcome": "corrupt",
+      "password": "correct horse battery staple",
+      "record": "$argon2id$v=19$m=8,t=2,p=1$AAECAwQFBgcICQoLDA0ODw$gYJZtjEAJqjg26xdLmknq8/bB7MiWPrE9hsYuA+SkIU"
+    },
+    {
+      "name": "passes_differ",
+      "outcome": "corrupt",
+      "password": "correct horse battery staple",
+      "record": "$argon2id$v=19$m=19456,t=3,p=1$AAECAwQFBgcICQoLDA0ODw$gYJZtjEAJqjg26xdLmknq8/bB7MiWPrE9hsYuA+SkIU"
+    },
+    {
+      "name": "parallelism_differ",
+      "outcome": "corrupt",
+      "password": "correct horse battery staple",
+      "record": "$argon2id$v=19$m=19456,t=2,p=4$AAECAwQFBgcICQoLDA0ODw$gYJZtjEAJqjg26xdLmknq8/bB7MiWPrE9hsYuA+SkIU"
+    },
+    {
+      "name": "params_reordered",
+      "outcome": "corrupt",
+      "password": "correct horse battery staple",
+      "record": "$argon2id$v=19$t=2,m=19456,p=1$AAECAwQFBgcICQoLDA0ODw$gYJZtjEAJqjg26xdLmknq8/bB7MiWPrE9hsYuA+SkIU"
+    },
+    {
+      "name": "no_version",
+      "outcome": "corrupt",
+      "password": "correct horse battery staple",
+      "record": "$argon2id$m=19456,t=2,p=1$AAECAwQFBgcICQoLDA0ODw$gYJZtjEAJqjg26xdLmknq8/bB7MiWPrE9hsYuA+SkIU"
+    },
+    {
+      "name": "salt_15_bytes",
+      "outcome": "corrupt",
+      "password": "correct horse battery staple",
+      "record": "$argon2id$v=19$m=19456,t=2,p=1$AAECAwQFBgcICQoLDA0O$GTgmjBidHIQgIHVRAt9XD9RqO3ptnQ9KzVh8OI72wT4"
+    },
+    {
+      "name": "salt_17_bytes",
+      "outcome": "corrupt",
+      "password": "correct horse battery staple",
+      "record": "$argon2id$v=19$m=19456,t=2,p=1$AAECAwQFBgcICQoLDA0ODwk$IoLbUGRr4GhJIOTzrq+qMerFIfOB8Jjdhhg7ohhVm/g"
+    },
+    {
+      "name": "tag_truncated",
+      "outcome": "corrupt",
+      "password": "correct horse battery staple",
+      "record": "$argon2id$v=19$m=19456,t=2,p=1$AAECAwQFBgcICQoLDA0ODw$gYJZtjEAJqjg26xdLmknq8/bB7MiWPrE9hsYuA+Sk"
+    },
+    {
+      "name": "tag_padded",
+      "outcome": "corrupt",
+      "password": "correct horse battery staple",
+      "record": "$argon2id$v=19$m=19456,t=2,p=1$AAECAwQFBgcICQoLDA0ODw$gYJZtjEAJqjg26xdLmknq8/bB7MiWPrE9hsYuA+SkIU="
+    },
+    {
+      "name": "trailing_field",
+      "outcome": "corrupt",
+      "password": "correct horse battery staple",
+      "record": "$argon2id$v=19$m=19456,t=2,p=1$AAECAwQFBgcICQoLDA0ODw$gYJZtjEAJqjg26xdLmknq8/bB7MiWPrE9hsYuA+SkIU$x"
+    },
+    {
+      "name": "leading_space",
+      "outcome": "corrupt",
+      "password": "correct horse battery staple",
+      "record": " $argon2id$v=19$m=19456,t=2,p=1$AAECAwQFBgcICQoLDA0ODw$gYJZtjEAJqjg26xdLmknq8/bB7MiWPrE9hsYuA+SkIU"
+    },
+    {
+      "name": "url_alphabet",
+      "outcome": "corrupt",
+      "password": "correct horse battery staple",
+      "record": "$argon2id$v=19$m=19456,t=2,p=1$AAECAwQFBgcICQoLDA0ODw$gYJZtjEAJqjg26xdLmknq8_bB7MiWPrE9hsYuA-SkIU"
+    },
+    {
+      "name": "oversized",
+      "outcome": "corrupt",
+      "password": "correct horse battery staple",
+      "record": "$argon2id$v=19$m=19456,t=2,p=1$AAECAwQFBgcICQoLDA0ODw$gYJZtjEAJqjg26xdLmknq8/bB7MiWPrE9hsYuA+SkIUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    }
+  ],
+  "write_format": {
+    "algorithm": "argon2id",
+    "max_record_bytes": 512,
+    "memory_kib": 19456,
+    "parallelism": 1,
+    "passes": 2,
+    "salt_bytes": 16,
+    "tag_bytes": 32,
+    "version": 19
+  }
+}

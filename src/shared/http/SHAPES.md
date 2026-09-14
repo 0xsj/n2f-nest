@@ -3,15 +3,20 @@
 **Stage:** implemented for the diagnostic JSON boundary. Native casing and ownership differ; the
 same facts and scenarios apply in all three clones.
 
-| Shape           | Members and constraints                                                                                               |
-| --------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Problem         | H02 members; immutable-by-ownership projection, public field map copied                                               |
-| Start           | Normalized method and known http/https scheme; no raw request object                                                  |
-| CompletionFacts | Optional final status 200..599; optional selected failure kind; termination enum                                      |
-| Classification  | Outcome, span status unset/error, optional fixed error.type                                                           |
-| Completion      | Facts plus monotonic elapsed duration, optional registered route/operation and available safe scope/error projections |
-| Active          | Optional validated TraceRef, one terminal finish; no business return value                                            |
-| Observer        | Start an Active observation under the native request execution context                                                |
+| Shape           | Members and constraints                                                                                                              |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Problem         | H02 members; immutable-by-ownership projection, public field map copied                                                              |
+| Start           | Normalized method and known http/https scheme; no raw request object                                                                 |
+| CompletionFacts | Optional final status 200..599; optional selected failure kind; termination enum                                                     |
+| Classification  | Outcome, span status unset/error, optional fixed error.type                                                                          |
+| Completion      | Facts plus monotonic elapsed duration, optional registered route/operation and available safe scope/error projections                |
+| Active          | Optional validated TraceRef, one terminal finish; no business return value                                                           |
+| Observer        | Start an Active observation under the native request execution context                                                               |
+| FeatureRequest  | Immutable: method, template, bounded body bytes, selected header lists, cookie name → list, source key, query, admitted              |
+| Admission       | anonymous, authenticated (initiator actor, optional tenant, admitted value) or refused (error, optional retry-after)                 |
+| Reply           | Status from 200/201/202/204/303, optional JSON body (none for 204), allowlisted headers, serialized Set-Cookie list                  |
+| Refuse          | A classified failure plus allowlisted headers and serialized Set-Cookie list; the server applies them and classifies the inner error |
+| CookieValue     | Name, value, path, max-age or expiry, Secure, HttpOnly, SameSite; `__Host-` requires Secure and Path=/                               |
 
 Termination is response_completed, peer_closed, deadline, handler_error,
 write_error or abandoned. response_completed requires a final status. Other

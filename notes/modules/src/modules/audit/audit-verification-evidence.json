@@ -1,0 +1,27 @@
+{
+  "date": "2026-09-13",
+  "command": "python3 tools/verify_audit.py",
+  "language": "typescript",
+  "transports": [
+    {
+      "transport": "postgres",
+      "actions": ["email.verified", "principal.registered", "session.created"],
+      "processed_audit_receipts": 3
+    },
+    {
+      "transport": "jetstream",
+      "actions": ["email.verified", "principal.registered", "session.created"],
+      "processed_audit_receipts": 3
+    }
+  ],
+  "assertions": [
+    "authenticated_read_requires_session",
+    "limit_bounds",
+    "occurred_and_recorded_times",
+    "redaction"
+  ],
+  "limits": [
+    "mutation_harness_recorded_separately",
+    "full_ordinary_suite_not_run"
+  ]
+}

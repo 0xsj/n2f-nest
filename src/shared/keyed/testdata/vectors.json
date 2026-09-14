@@ -1,0 +1,58 @@
+{
+  "vectors": [
+    {
+      "name": "basic",
+      "key_hex": "3031323334353637383961626364656630313233343536373839616263646566",
+      "purpose": "csrf",
+      "message_hex": "73657373696f6e2d6469676573742d6865783a30303131",
+      "tag_hex": "c29f3533287980e3ba89e4ab3ed87a1d87e928ae9109c38227f4008ca56d9672"
+    },
+    {
+      "name": "empty_message",
+      "key_hex": "3031323334353637383961626364656630313233343536373839616263646566",
+      "purpose": "csrf",
+      "message_hex": "",
+      "tag_hex": "16de6af57b5bda102d439f6e7876775d2d2a032bfe5b1cbee03e701cab2e1e43"
+    },
+    {
+      "name": "other_purpose",
+      "key_hex": "3031323334353637383961626364656630313233343536373839616263646566",
+      "purpose": "rate_limit",
+      "message_hex": "73657373696f6e2d6469676573742d6865783a30303131",
+      "tag_hex": "36b12989fb5ee4967a8d16714fa7936ae74c91516c3f2adb5af93eab4678003f"
+    },
+    {
+      "name": "long_key",
+      "key_hex": "6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b",
+      "purpose": "rate_limit",
+      "message_hex": "6c6f67696e3a616461406578616d706c652e636f6d",
+      "tag_hex": "ff5212c2bb9ebc4221364da9cd2b2d7e86b1ca9370d335f862f05bba491d7f41"
+    },
+    {
+      "name": "binary",
+      "key_hex": "3031323334353637383961626364656630313233343536373839616263646566",
+      "purpose": "csrf",
+      "message_hex": "00ff01fe",
+      "tag_hex": "6e897a8e499ebdef1568e781aaa7333d63867880dd58bffe75db5ee8f92bd660"
+    }
+  ],
+  "purpose_rejects": [
+    {
+      "name": "empty_purpose",
+      "purpose": ""
+    },
+    {
+      "name": "space_purpose",
+      "purpose": "csrf token"
+    },
+    {
+      "name": "long_purpose",
+      "purpose": "ppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp"
+    },
+    {
+      "name": "non_ascii_purpose",
+      "purpose": "csrf\u00e9"
+    }
+  ],
+  "short_key_hex": "30313233343536373839616263646566303132333435363738396162636465"
+}

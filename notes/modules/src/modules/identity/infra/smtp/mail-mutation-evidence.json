@@ -1,0 +1,62 @@
+{
+  "language": "nest",
+  "caught": 6,
+  "selected": 6,
+  "exhaustive": false,
+  "evidence": ".",
+  "cases": [
+    {
+      "name": "token_in_query",
+      "file": "src/modules/identity/infra/smtp/index.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "1ae866b8c07abb3f80fcf964463cdfd99beb85eb23c3b9cc79dca2791f6915ab"
+    },
+    {
+      "name": "delivered_on_rejection",
+      "file": "src/modules/identity/infra/smtp/index.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "1ae866b8c07abb3f80fcf964463cdfd99beb85eb23c3b9cc79dca2791f6915ab"
+    },
+    {
+      "name": "timeout_ignored",
+      "file": "src/modules/identity/infra/smtp/index.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "1ae866b8c07abb3f80fcf964463cdfd99beb85eb23c3b9cc79dca2791f6915ab"
+    },
+    {
+      "name": "token_in_log",
+      "file": "src/modules/identity/infra/smtp/index.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "1ae866b8c07abb3f80fcf964463cdfd99beb85eb23c3b9cc79dca2791f6915ab"
+    },
+    {
+      "name": "expiry_omitted",
+      "file": "src/modules/identity/infra/smtp/index.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "1ae866b8c07abb3f80fcf964463cdfd99beb85eb23c3b9cc79dca2791f6915ab"
+    },
+    {
+      "name": "suspended_gets_mail",
+      "file": "src/modules/identity/app/command/request-challenge.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "524658ca573165926a7440007b121416c4b786e4427afa623f2155cd78b3472c"
+    }
+  ],
+  "logs": [
+    "mail_baseline.log",
+    "mail_delivered_on_rejection.log",
+    "mail_expiry_omitted.log",
+    "mail_restored.log",
+    "mail_suspended_gets_mail.log",
+    "mail_timeout_ignored.log",
+    "mail_token_in_log.log",
+    "mail_token_in_query.log"
+  ],
+  "verified_on": "2026-09-12"
+}

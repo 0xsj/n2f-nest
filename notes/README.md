@@ -3,6 +3,23 @@
 ## First domain leaves
 
 - [Built-in authentication boundaries](modules/src/modules/identity/domain/authentication-boundaries.md).
+- [Auth leaves: TypeScript walkthrough and mutation evidence](modules/src/modules/identity/domain/auth-leaves-walkthrough.md).
+- [Password hashing adapter: allowlist, dummy work and admission](modules/src/modules/identity/password-hash/README.md).
+- [Token codec adapter: canonical form and purpose binding](modules/src/modules/identity/token-codec/README.md).
+- [Identity application operations: ports, order and safe events](modules/src/modules/identity/app/README.md).
+- [Identity PostgreSQL store: locks, rollback markers and real-database evidence](modules/src/modules/identity/infra/postgres/README.md).
+- [Identity HTTP transport: cookies, CSRF and admission](modules/src/modules/identity/transport/http/README.md).
+- [Identity local adapters: limiter, blocklist, undelivered mail](modules/src/modules/identity/infra/local/README.md).
+- [Shared Redis limiter and trusted proxy policy](modules/src/modules/identity/infra/redis/README.md).
+- [Keyed digest](modules/src/shared/keyed/README.md).
+- [HTTP feature routes and admission](modules/src/shared/http/feature-routes.md).
+- [Root: auth composition](modules/src/root/auth-composition.md).
+- [Identity SMTP mail delivery: bounds, outcomes and evidence](modules/src/modules/identity/infra/smtp/README.md).
+- [Audit ingestion: receipts and an authenticated projection](modules/src/modules/audit/README.md).
+- [Organization and membership value leaves](modules/src/modules/org/domain/README.md).
+- [Organization membership workflows](modules/src/modules/org/app/README.md).
+- [Organization PostgreSQL persistence](modules/src/modules/org/infra/postgres/README.md).
+- [Organization authenticated HTTP transport and request collection](modules/src/modules/org/transport/http/README.md).
 
 - [Principal invariants and verification](modules/src/modules/identity/domain/README.md).
 - [TypeScript ownership and syntax](modules/src/modules/identity/domain/language-walkthrough.md).
@@ -22,6 +39,7 @@
 - [health: ownership and failure behavior](modules/src/shared/health/ownership-and-failures.md).
 - [Outbound HTTP lifecycle](modules/src/shared/httpclient/lifetimes.md).
 - [WebSocket lifetime and protocol](modules/src/shared/socket/lifetimes.md).
+- [Ticketed WebSocket admission and ongoing revalidation](modules/src/shared/socket/ticketed-authentication.md).
 - [Events and durable receipts](modules/src/shared/events/durable-receipts.md).
 - [Runtime verification and language comparison](modules/src/root/infrastructure-verification.md).
 

@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { Envelope, type Publisher } from '../index.js';
-import { Store, Mailbox, migration, enqueue } from './store.js';
+import { Store, Mailbox, migration, receiptsMigration, enqueue } from './store.js';
 import { Database } from '../../postgres/index.js';
 import { SecretString } from '../../secret/index.js';
 import { parse } from '../../id/index.js';
@@ -43,6 +43,7 @@ it.skipIf(!process.env.N2F_TEST_DATABASE_URL)(
             version: 2,
             sql: 'CREATE TABLE event_fixture(id integer PRIMARY KEY)',
           },
+          receiptsMigration(3),
         ]),
       );
       const exec = async (sql: string) =>
@@ -62,7 +63,7 @@ it.skipIf(!process.env.N2F_TEST_DATABASE_URL)(
         );
       const ready = () =>
         exec(
-          'UPDATE n2f_outbox SET available_at=clock_timestamp(); UPDATE n2f_mailbox SET available_at=clock_timestamp()',
+          'UPDATE n2f_outbox SET available_at=clock_timestamp(); UPDATE n2f_mailbox_receipts SET available_at=clock_timestamp()',
         );
       const add = async (e: Envelope) =>
         value(await db.transaction((tx) => enqueue(tx, e)));
@@ -105,7 +106,7 @@ it.skipIf(!process.env.N2F_TEST_DATABASE_URL)(
       if (!reused.ok) expect(reused.error.kind).toBe('conflict');
       expect(
         (
-          await mailbox.consume(async (tx) => {
+          await mailbox.consume('fixture', async (tx) => {
             await tx.query('INSERT INTO event_fixture VALUES(2)');
             return err(refused);
           })
@@ -115,7 +116,7 @@ it.skipIf(!process.env.N2F_TEST_DATABASE_URL)(
       await ready();
       expect(
         value(
-          await mailbox.consume(async (tx) => {
+          await mailbox.consume('fixture', async (tx) => {
             await tx.query('INSERT INTO event_fixture VALUES(2)');
             return ok(undefined);
           }),
@@ -125,11 +126,14 @@ it.skipIf(!process.env.N2F_TEST_DATABASE_URL)(
       value(await mailbox.publish(event(1)));
       expect(
         value(
-          await mailbox.consume(async () => {
+          await mailbox.consume('fixture', async () => {
             throw Error('duplicate consumed');
           }),
         ),
       ).toBe(false);
+      expect(
+        value(await mailbox.consume('other', async () => ok(undefined))),
+      ).toBe(true);
       await add(event(2));
       const old = value(await store.claim(ident(200)))!;
       await exec(
@@ -153,13 +157,13 @@ it.skipIf(!process.env.N2F_TEST_DATABASE_URL)(
       ).toBe(1);
       for (let n = 0; n < 5; n++) {
         await ready();
-        expect((await mailbox.consume(async () => err(refused))).ok).toBe(
+        expect((await mailbox.consume('fixture', async () => err(refused))).ok).toBe(
           false,
         );
       }
       expect(
         await count(
-          "SELECT count(*) FROM n2f_mailbox WHERE state='dead' AND attempts=5",
+          "SELECT count(*) FROM n2f_mailbox_receipts WHERE consumer='fixture' AND state='dead' AND attempts=5",
         ),
       ).toBe(1);
       await add(event(5));
@@ -170,7 +174,7 @@ it.skipIf(!process.env.N2F_TEST_DATABASE_URL)(
       ]);
       expect(value(a)!.event.id).not.toBe(value(b)!.event.id);
       // jsonb output spacing expands this valid wire beyond 64 KiB.
-      await exec('TRUNCATE n2f_outbox, n2f_mailbox');
+      await exec('TRUNCATE n2f_outbox, n2f_mailbox, n2f_mailbox_receipts');
       await add(
         value(
           Envelope.create(
@@ -185,7 +189,7 @@ it.skipIf(!process.env.N2F_TEST_DATABASE_URL)(
       expect(value(await store.dispatch(mailbox, ident(701)))).toBe(true);
       expect(
         value(
-          await mailbox.consume(async (_, got) => {
+          await mailbox.consume('fixture', async (_, got) => {
             expect(got.id).toBe(ident(700));
             return ok(undefined);
           }),

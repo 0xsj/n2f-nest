@@ -1,7 +1,15 @@
 # Built-in identity and authentication
 
-**Stage:** specified, not implemented. Principal I01–I07 are implemented; the auth
-contracts below define the next build. No login endpoint is runnable yet.
+**Stage:** browser workflow complete. Stages 1–6 and the mail delivery half of
+stage 7 are implemented and mutation-checked: leaves, crypto adapters, application
+operations, the PostgreSQL store, the `/v1/auth` routes with cookies, origin and
+CSRF admission, root composition, and SMTP delivery. The real process walks
+register, verify, login, session, logout and reset against Mailpit. The shared
+Redis limiter and trusted-proxy policy are implemented and real-broker verified;
+the redaction review and WebSocket ticket/admission slice are implemented and
+real-process verified. The first audit ingestion slice is also implemented and
+real-broker verified; selected audit and limiter mutations are caught, and full-suite
+evidence still remains.
 
 Authentication ships with this blueprint. A profile/account domain is not a
 prerequisite. Identity owns principals, login identifiers, password credentials,
@@ -25,23 +33,28 @@ must not gate authentication or silently change the principal contract.
 
 ## Leaf-first build order
 
-1. Specify credential/session/challenge rules and native API shapes (this stage).
+1. Specify credential/session/challenge rules and native API shapes (done).
 2. Write comparable executable leaf specs, observe meaningful red, implement pure
-   values and transitions, then run selected mutations and record mirrored notes.
-3. Implement identity-owned PasswordHasher and TokenCodec adapters. Use maintained
+   values and transitions, then run selected mutations and record mirrored notes (done).
+3. Implement identity-owned PasswordHasher and TokenCodec adapters (done). Use maintained
    crypto libraries, bounded work and interoperability vectors across the builds.
 4. Implement register/verify/login/authenticate/revoke/change/reset application
-   operations with fake consumer-owned ports. No ORM, HTTP or crypto SDK types.
-5. PostgreSQL migrations and concrete atomic operations. Verify unique login races,
+   operations with fake consumer-owned ports. No ORM, HTTP or crypto SDK types (done).
+5. PostgreSQL migrations and concrete atomic operations (done). Verify unique login races,
    credential-version races, challenge replay, revocation and uncertain commit.
-6. Extend bounded HTTP beyond its current diagnostic GET/HEAD surface. Add methods,
+6. Extend bounded HTTP beyond its current diagnostic GET/HEAD surface (done). Add methods,
    bounded bodies, selected headers, response headers/status and cookies while
    preserving once-only completion observation. Add auth admission and real routes.
-7. Wire Mailpit delivery, auth rate limits, redaction and authenticated provenance;
-   verify the entire browser workflow and failure paths.
-8. Authenticate WebSocket admission and revalidate ongoing use. Translate identity
-   outbox facts into audit with consumer-specific deduplication. Compare PostgreSQL
-   and JetStream delivery. Only then build org against authenticated identity.
+7. Wire Mailpit delivery and shared Redis auth rate limits (done), with a root-owned
+   trusted-proxy policy; complete the redaction review and verify the entire
+   browser workflow and failure paths.
+8. Authenticate WebSocket admission and revalidate ongoing use (done). Translate identity
+   outbox facts into audit with consumer-specific deduplication (first slice done;
+   real-broker evidence and selected mutation evidence pass; full-suite evidence
+   remains). Compare PostgreSQL and JetStream delivery. The org organization,
+   membership, create application and PostgreSQL persistence slices are now done;
+   the root-composed authenticated org create route is done; broader membership
+   policy is next.
 
 Each stage updates current status; a passing principal or session unit suite does
 not satisfy the auth milestone. No account/profile placeholder is needed.

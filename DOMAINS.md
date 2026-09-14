@@ -1,7 +1,14 @@
 # First domains: identity, audit and org
 
-Status: identity principal leaves I01–I07 are implemented and tested. Application
-operations, persistence, domain HTTP, audit and org remain planned below.
+Status: identity principal leaves I01–I07, the authentication leaves, the crypto
+adapters, the application operations, the PostgreSQL store, the identity HTTP
+transport, SMTP mail delivery and root composition are implemented and tested.
+The first audit ingestion slice, shared Redis limiter and trusted-proxy policy
+are implemented; WebSocket ticket admission and the first audit read/ingestion
+slice are also implemented. Socket revalidation is now implemented and live
+verified; the org value leaves, membership workflows, PostgreSQL persistence
+adapter and root-composed authenticated organization routes are live-verified.
+Ownership transfer, removal and suspension remain planned below.
 
 ## Ownership map
 
@@ -29,9 +36,12 @@ No database driver, HTTP framework, NATS or OTel type enters domain/application 
 3. Audit ingestion: translate the identity event at root into an audit-owned fact.
    Persist its record and consumer receipt atomically. Deduplicate per consumer;
    do not let one global processed flag silently stand for multiple subscribers.
-4. Organization creation and initial owner membership, with principal eligibility
-   supplied through an org-owned port and composed by root. Organization and its
-   initial membership must share the org transaction boundary.
+4. Organization creation, initial owner membership, invitations and role changes,
+   with principal eligibility supplied through an org-owned port and composed by
+   root. The value leaves, application workflows, PostgreSQL adapter and
+   authenticated create/list/invite/accept/role routes are implemented and
+   live-verified. Ownership transfer, removal and suspension are separate next
+   policy decisions.
 
 The domain specification precedes each implementation. Pure values and transitions
 come before application ports, persistence and transport. Comparable tests exercise

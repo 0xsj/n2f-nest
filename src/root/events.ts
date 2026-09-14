@@ -13,6 +13,7 @@ import {
   Store,
   Mailbox,
   migration,
+  receiptsMigration,
   enqueue,
 } from '../shared/events/postgres/store.js';
 import {
@@ -81,7 +82,7 @@ export async function runEvents(
       value(await broker.provision(signal));
     }
     database = value(await Database.open(config));
-    value(await database.migrate([migration(1)]));
+    value(await database.migrate([migration(1), receiptsMigration(3)]));
     const factory = new Factory(clock, ids),
       executor = value(actor('service', c.resource.name));
     const scope = value(
@@ -126,7 +127,7 @@ export async function runEvents(
         });
       let seen = false;
       const consumed = value(
-        await mailbox.consume(async (_tx, received) => {
+        await mailbox.consume('events-example', async (_tx, received) => {
           seen = received.id === eventId;
           return ok(undefined);
         }),

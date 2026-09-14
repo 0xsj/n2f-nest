@@ -24,14 +24,19 @@ does not satisfy it. See jetstream/CONTRACT.md and its real adapter tests.
 E05: The first publisher is a durable PostgreSQL mailbox in a separate transaction.
 It deduplicates event IDs and refuses conflicting reuse. Crash after mailbox commit
 but before outbox ack can redeliver; the mailbox must retain one matching event.
-Mailbox is a single local delivery destination, not broker fanout or ordered streams.
-E06: Consumer callback runs with the selected mailbox row locked and uses the same
-database transaction for its local effects and processed marker. Savepoint isolates
-callback failure so its effects roll back while retry/dead metadata can commit.
-At most five committed attempts; poison is retained. A whole-transaction abort can
-roll back attempt metadata, so this is not a physical invocation limit. No external effects or peer-module calls
-inside this transaction. Future multi-subscriber workflows need consumer-specific
-mailboxes/receipts and ordering expectations, not a silent widening of this promise.
+Mailbox rows hold one envelope each; they are not the processing state of any one
+consumer. The mailbox is a single local delivery destination, not broker fanout or
+ordered streams.
+E06: Consumer callback takes an explicit consumer name. The selected mailbox row
+and that consumer's receipt are locked, and the callback's local effects commit in
+the same database transaction as that receipt's processed marker. A receipt is
+keyed by (event ID, consumer), so two consumers may process the same envelope
+independently. Savepoint isolates callback failure so its effects roll back while
+that consumer's retry/dead metadata can commit. At most five committed attempts;
+a whole-transaction abort can roll back attempt metadata, so this is not a
+physical invocation limit. No external effects or peer-module calls inside this
+transaction. Consumer names are lowercase ASCII letters, digits, dot, underscore
+or hyphen, at most 64 bytes.
 E07: Root owns the polling cadence, generator, stop signal, observation and shutdown.
 One dispatch call is one attempt; there is no hidden global worker. All concrete
 database operations are bounded. Publisher implementations honor cancellation and

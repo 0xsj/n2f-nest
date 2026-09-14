@@ -1,8 +1,10 @@
 # Principal invariants before effects
 
 **Current direction:** authentication is required baseline scope. These are the
-completed principal leaves; [the auth boundary note](authentication-boundaries.md)
-records the next credential/session/challenge stage without claiming it implemented.
+completed principal leaves; the credential/session/challenge leaves are implemented
+too, with their own [language walkthrough](auth-leaves-walkthrough.md),
+[mutation evidence](auth-mutation-evidence.json) and
+[boundary note](authentication-boundaries.md).
 
 The first domain slice is a pure principal lifecycle; registering this value does
 not persist a user, establish credentials, authenticate a caller or publish an event.

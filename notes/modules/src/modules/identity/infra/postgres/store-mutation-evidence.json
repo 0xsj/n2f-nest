@@ -1,0 +1,62 @@
+{
+  "language": "nest",
+  "caught": 6,
+  "selected": 6,
+  "exhaustive": false,
+  "evidence": ".",
+  "cases": [
+    {
+      "name": "duplicate_as_failure",
+      "file": "infra/postgres/index.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "3eabde248a681c7843b12c744c4bcf7a792683cc29a5fb15f9c962476b3ad534"
+    },
+    {
+      "name": "stale_login_ignored",
+      "file": "infra/postgres/index.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "3eabde248a681c7843b12c744c4bcf7a792683cc29a5fb15f9c962476b3ad534"
+    },
+    {
+      "name": "consume_unguarded",
+      "file": "infra/postgres/index.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "3eabde248a681c7843b12c744c4bcf7a792683cc29a5fb15f9c962476b3ad534"
+    },
+    {
+      "name": "backward_time_admitted",
+      "file": "infra/postgres/index.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "3eabde248a681c7843b12c744c4bcf7a792683cc29a5fb15f9c962476b3ad534"
+    },
+    {
+      "name": "revoke_all_unguarded",
+      "file": "infra/postgres/index.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "3eabde248a681c7843b12c744c4bcf7a792683cc29a5fb15f9c962476b3ad534"
+    },
+    {
+      "name": "events_dropped",
+      "file": "infra/postgres/index.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "3eabde248a681c7843b12c744c4bcf7a792683cc29a5fb15f9c962476b3ad534"
+    }
+  ],
+  "logs": [
+    "store_backward_time_admitted.log",
+    "store_baseline.log",
+    "store_consume_unguarded.log",
+    "store_duplicate_as_failure.log",
+    "store_events_dropped.log",
+    "store_restored.log",
+    "store_revoke_all_unguarded.log",
+    "store_stale_login_ignored.log"
+  ],
+  "verified_on": "2026-09-12"
+}

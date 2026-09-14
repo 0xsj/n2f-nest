@@ -1,0 +1,66 @@
+@baseUrl = http://127.0.0.1:7300
+@origin = {{baseUrl}}
+@ownerCookie = n2f_session=PASTE_OWNER_SESSION; n2f_csrf=PASTE_OWNER_CSRF
+@ownerCsrf = PASTE_OWNER_CSRF_TOKEN
+@inviteeCookie = n2f_session=PASTE_INVITEE_SESSION; n2f_csrf=PASTE_INVITEE_CSRF
+@inviteeCsrf = PASTE_INVITEE_CSRF_TOKEN
+@organizationId = PASTE_ORGANIZATION_ID
+@ownerPrincipalId = PASTE_OWNER_PRINCIPAL_ID
+@inviteePrincipalId = PASTE_INVITEE_PRINCIPAL_ID
+@invitationId = PASTE_INVITATION_ID
+
+### Issue a CSRF token; copy the response token and cookie into the variables above.
+GET {{baseUrl}}/v1/auth/csrf
+
+### List the organizations visible to the owner session.
+GET {{baseUrl}}/v1/org/organizations
+Cookie: {{ownerCookie}}
+
+### Create an organization; the owner comes from the authenticated session.
+POST {{baseUrl}}/v1/org/organizations
+Origin: {{origin}}
+Content-Type: application/json
+X-CSRF-Token: {{ownerCsrf}}
+Cookie: {{ownerCookie}}
+
+{"name":"HTTP Workspace"}
+
+### Invite an existing active principal as a member.
+POST {{baseUrl}}/v1/org/invitations
+Origin: {{origin}}
+Content-Type: application/json
+X-CSRF-Token: {{ownerCsrf}}
+Cookie: {{ownerCookie}}
+
+{"organization_id":"{{organizationId}}","principal_id":"{{inviteePrincipalId}}","role":"member"}
+
+### Accept the invitation from the invitee's authenticated session.
+POST {{baseUrl}}/v1/org/invitations/accept
+Origin: {{origin}}
+Content-Type: application/json
+X-CSRF-Token: {{inviteeCsrf}}
+Cookie: {{inviteeCookie}}
+
+{"invitation_id":"{{invitationId}}"}
+
+### Promote the invitee to admin from the owner session.
+POST {{baseUrl}}/v1/org/memberships/role
+Origin: {{origin}}
+Content-Type: application/json
+X-CSRF-Token: {{ownerCsrf}}
+Cookie: {{ownerCookie}}
+
+{"organization_id":"{{organizationId}}","principal_id":"{{inviteePrincipalId}}","role":"admin"}
+
+### Confirm the invitee sees the updated role.
+GET {{baseUrl}}/v1/org/organizations
+Cookie: {{inviteeCookie}}
+
+### Negative: an admin cannot invite another admin.
+POST {{baseUrl}}/v1/org/invitations
+Origin: {{origin}}
+Content-Type: application/json
+X-CSRF-Token: {{inviteeCsrf}}
+Cookie: {{inviteeCookie}}
+
+{"organization_id":"{{organizationId}}","principal_id":"{{ownerPrincipalId}}","role":"admin"}

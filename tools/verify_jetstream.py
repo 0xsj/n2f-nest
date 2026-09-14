@@ -76,7 +76,7 @@ def main():
         example()
         pending_id=str(uuid.UUID(pending["id"]))
         database_name=demo["DATABASE_URL"].rsplit("/",1)[1]
-        consumed=run(["docker","exec",container,"psql","-U","n2f","-d",database_name,"-Atc","SELECT count(*) FROM n2f_mailbox WHERE state='processed' AND event_id='"+pending_id+"'"]).stdout.strip()
+        consumed=run(["docker","exec",container,"psql","-U","n2f","-d",database_name,"-Atc","SELECT count(*) FROM n2f_mailbox_receipts WHERE consumer='events-example' AND state='processed' AND event_id='"+pending_id+"'"]).stdout.strip()
         assert consumed=="1",consumed
         evidence["cases"].append("pending_envelope_survives_kill_recreate_and_consumes")
         compose("stop","-t","1","nats");example(False)

@@ -17,6 +17,13 @@ export const migration = (version: number): Migration => ({
     'utf8',
   ),
 });
+export const receiptsMigration = (version: number): Migration => ({
+  version,
+  sql: readFileSync(
+    new URL('./migrations/0003_mailbox_receipts.sql', import.meta.url),
+    'utf8',
+  ),
+});
 const conflict = (code: string) =>
   failure('conflict', 'event delivery conflict', { type: 'events.' + code });
 async function insert(
@@ -132,17 +139,29 @@ export class Mailbox implements Publisher {
     return result.ok ? ok({ eventId: event.id, durable: true }) : result;
   }
   async consume(
+    consumer: string,
     fn: (
       tx: pg.PoolClient,
       event: Envelope,
       signal: AbortSignal,
     ) => Promise<Result<void, Failure>>,
   ): Promise<Result<boolean, Failure>> {
+    if (!/^[a-z0-9_.-]{1,64}$/.test(consumer))
+      return err(
+        failure('invalid', 'invalid event consumer', {
+          type: 'events.invalid_consumer',
+        }),
+      );
     let rejected: Failure | undefined;
     const result = await this.database.transaction(async (tx, signal) => {
+      await tx.query(
+        'INSERT INTO public.n2f_mailbox_receipts(event_id,consumer) SELECT event_id,$1 FROM public.n2f_mailbox ON CONFLICT(event_id,consumer) DO NOTHING',
+        [consumer],
+      );
       const row = (
         await tx.query<{ envelope: string; attempts: number }>(
-          "SELECT envelope::text,attempts FROM public.n2f_mailbox WHERE state='pending' AND attempts<5 AND available_at<=clock_timestamp() ORDER BY available_at,event_id FOR UPDATE SKIP LOCKED LIMIT 1",
+          "SELECT m.envelope::text,r.attempts FROM public.n2f_mailbox m JOIN public.n2f_mailbox_receipts r ON r.event_id=m.event_id WHERE r.consumer=$1 AND r.state='pending' AND r.attempts<5 AND r.available_at<=clock_timestamp() ORDER BY r.available_at,m.event_id FOR UPDATE OF m,r SKIP LOCKED LIMIT 1",
+          [consumer],
         )
       ).rows[0];
       if (!row) return ok(false);
@@ -166,8 +185,8 @@ export class Mailbox implements Publisher {
           ? 'dead'
           : 'pending';
       await tx.query(
-        "UPDATE public.n2f_mailbox SET state=$2,attempts=attempts+1,available_at=clock_timestamp()+interval '100 milliseconds' WHERE event_id=$1::uuid",
-        [event.value.id, state],
+        "UPDATE public.n2f_mailbox_receipts SET state=$3,attempts=attempts+1,available_at=clock_timestamp()+interval '100 milliseconds' WHERE event_id=$1::uuid AND consumer=$2",
+        [event.value.id, consumer, state],
       );
       return ok(true);
     });

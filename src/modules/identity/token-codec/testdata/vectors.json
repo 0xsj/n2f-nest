@@ -1,0 +1,119 @@
+{
+  "rejects": [
+    {
+      "name": "empty",
+      "secret": ""
+    },
+    {
+      "name": "short_42",
+      "secret": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh"
+    },
+    {
+      "name": "long_44",
+      "secret": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8A"
+    },
+    {
+      "name": "padded",
+      "secret": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh="
+    },
+    {
+      "name": "noncanonical_tail",
+      "secret": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHhB"
+    },
+    {
+      "name": "std_alphabet_plus",
+      "secret": "+AECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8"
+    },
+    {
+      "name": "std_alphabet_slash",
+      "secret": "/AECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8"
+    },
+    {
+      "name": "whitespace",
+      "secret": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh "
+    },
+    {
+      "name": "newline_suffix",
+      "secret": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8\n"
+    },
+    {
+      "name": "non_ascii",
+      "secret": "éECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8"
+    }
+  ],
+  "secret_length": 43,
+  "tokens": [
+    {
+      "digest_hex": "14b31a7c55dbd58137915ff63a45bc014cc062a4bc7d5739dbb19bacf9b9b113",
+      "name": "sequence",
+      "purpose": "session",
+      "secret": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8"
+    },
+    {
+      "digest_hex": "7e86dba5b18b80efed8d0a42753ec67d0a21cd5185ea3950714ad68ad4fe4283",
+      "name": "ones",
+      "purpose": "session",
+      "secret": "__________________________________________8"
+    },
+    {
+      "digest_hex": "a128d763502b5e781fe37487acf70e69cfc36580cbf990ffa28d71b451322ebb",
+      "name": "zero",
+      "purpose": "session",
+      "secret": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    },
+    {
+      "digest_hex": "ec77360f3e067e343fe67ed5a7feebb22635edc7845adc13b79a38ebe930c782",
+      "name": "sequence",
+      "purpose": "email_verification",
+      "secret": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8"
+    },
+    {
+      "digest_hex": "10120701e7cbf1a9f026d775967081a77fba34687429b29cc9cf1c454678f35d",
+      "name": "ones",
+      "purpose": "email_verification",
+      "secret": "__________________________________________8"
+    },
+    {
+      "digest_hex": "33b86742a65105370f4fe68cdcbea3658e674c5b685265001b9415351abb2f30",
+      "name": "zero",
+      "purpose": "email_verification",
+      "secret": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    },
+    {
+      "digest_hex": "d8bb63494b5103ac652c72287ef57d9a9fcb34f9d90ce7bdb1fb235008d60fd7",
+      "name": "sequence",
+      "purpose": "password_reset",
+      "secret": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8"
+    },
+    {
+      "digest_hex": "3f6c703554795e597f8afbc9a61f1825799225837fd05a36861557eaed057da2",
+      "name": "ones",
+      "purpose": "password_reset",
+      "secret": "__________________________________________8"
+    },
+    {
+      "digest_hex": "3203322d1f7d18441c62dd2200bcec5bf7818d19d5df582c645d86d245678cd8",
+      "name": "zero",
+      "purpose": "password_reset",
+      "secret": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    },
+    {
+      "digest_hex": "e88f5c68a9486793284d6f4eb55af6dfbec185022c18b90b579475e3d10ed7e0",
+      "name": "ones",
+      "purpose": "websocket_upgrade",
+      "secret": "__________________________________________8"
+    },
+    {
+      "digest_hex": "3af25c822e835fd9fb97291fdc9b03e6c3b6a4bc33f7753a3e3d529612f75d4e",
+      "name": "zero",
+      "purpose": "websocket_upgrade",
+      "secret": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    },
+    {
+      "digest_hex": "663b178c9d8fcee7281fc521053b92fc989e504d5137ec212f2d6f44bc309e3e",
+      "name": "sequence",
+      "purpose": "websocket_upgrade",
+      "secret": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8"
+    }
+  ]
+}

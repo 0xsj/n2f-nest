@@ -1,0 +1,62 @@
+{
+  "language": "nest",
+  "caught": 6,
+  "selected": 6,
+  "exhaustive": false,
+  "evidence": ".",
+  "cases": [
+    {
+      "name": "enumeration_leak",
+      "file": "app/command/login.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "7a36018586eb810b0f9ad79046a3e52cf3d6089f5bc540289f3faa698db59747"
+    },
+    {
+      "name": "duplicate_replaces",
+      "file": "app/command/register.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "ac052f1188f1b92480041a9ba260a802fb8ac9eda73f21229b0c32b399685bcf"
+    },
+    {
+      "name": "mail_after_uncertain",
+      "file": "app/command/register.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "ac052f1188f1b92480041a9ba260a802fb8ac9eda73f21229b0c32b399685bcf"
+    },
+    {
+      "name": "verify_without_proof",
+      "file": "app/command/verify-email.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "a421e54ae3fc2d8a892200daa4c0fc4ef1121d97bfcb6ec2241ab327003633db"
+    },
+    {
+      "name": "stale_as_success",
+      "file": "app/command/login.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "7a36018586eb810b0f9ad79046a3e52cf3d6089f5bc540289f3faa698db59747"
+    },
+    {
+      "name": "private_event_data",
+      "file": "app/command/login.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "7a36018586eb810b0f9ad79046a3e52cf3d6089f5bc540289f3faa698db59747"
+    }
+  ],
+  "logs": [
+    "app_baseline.log",
+    "app_duplicate_replaces.log",
+    "app_enumeration_leak.log",
+    "app_mail_after_uncertain.log",
+    "app_private_event_data.log",
+    "app_restored.log",
+    "app_stale_as_success.log",
+    "app_verify_without_proof.log"
+  ],
+  "verified_on": "2026-09-12"
+}

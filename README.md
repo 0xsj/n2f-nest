@@ -20,10 +20,28 @@ implemented. [JetStream](JETSTREAM.md) is also implemented and verified as a sec
 publisher, with a durable handoff into the PostgreSQL mailbox. See [the infrastructure guide](INFRASTRUCTURE_BUILD.md) for contracts,
 commands and limits. [Identity principal leaves](src/modules/identity/domain/CONTRACT.md) now implement
 registration values, restoration and versioned suspend/activate transitions.
-[Domain ownership and order](DOMAINS.md) describe the next application/persistence,
-audit and org slices. [Built-in authentication](AUTHENTICATION.md) is now specified
-as required baseline scope, with credential/session/challenge contracts, a logical
-schema and native API map. No persisted identity workflow or login is implemented yet.
+[Domain ownership and order](DOMAINS.md) describe the remaining application/
+persistence work and org workflow. The first audit ingestion slice includes per-consumer
+receipts, replaceable PostgreSQL/JetStream delivery and an authenticated
+`GET /v1/audit/records` projection. The org domain, create/invite/accept/role
+application operations, PostgreSQL transaction adapter and root-composed
+authenticated organization routes are implemented behind replaceable ports.
+The live verifier proves the owner→invitee acceptance→admin promotion workflow;
+ownership transfer, removal and suspension remain separate policy slices.
+The org request collection is [`tools/org.http`](tools/org.http); see
+[`tools/http-README.md`](tools/http-README.md) for VS Code, Neovim and curl use.
+[Built-in authentication](AUTHENTICATION.md) is required baseline scope; its
+email, password, token digest, credential, auth epoch, session and challenge leaves
+are implemented and mutation-checked, identity-owned Argon2id hashing and token codec adapters pass shared
+cross-language vectors, and the register, verify, login, logout, change and reset
+operations run against fake ports, a PostgreSQL store verified against the real
+database, and `/v1/auth` routes with cookies, origin and CSRF admission that root
+composes into the process per [AUTH_BUILD.md](AUTH_BUILD.md). Verification and reset mail is delivered over SMTP, so the real process
+completes register, verify, login, logout and reset against local Mailpit. The
+shared Redis limiter and trusted-proxy policy are implemented and verified with
+two independent HTTP processes; Redis state is digest-only and its URL is
+redacted. Audit's real-broker slice and selected audit/limiter mutations are
+also verified; full-suite evidence remains.
 
 The [telemetry into HTTP slice](TELEMETRY_HTTP.md) now runs a diagnostic server:
 provenance admission, safe problem responses, isolated request context, completion

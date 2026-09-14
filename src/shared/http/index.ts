@@ -9,3 +9,21 @@ export {
   type CompletionFacts,
   type Classification,
 } from './policy.js';
+export {
+  parseCookies,
+  serializeCookie,
+  allowFor,
+  Refuse,
+  Reply,
+  METHODS,
+  SELECTED_HEADERS,
+  REPLY_HEADERS,
+  type Method,
+  type FeatureRequest,
+  type Admission,
+  type CookieValue,
+  type ReplySpec,
+  type ReplyStatus,
+  type ReplyHeader,
+  type SelectedHeader,
+} from './feature.js';

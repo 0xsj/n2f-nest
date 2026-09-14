@@ -2,10 +2,11 @@
 
 ## First domain slice
 
-[Identity, audit and org ownership](DOMAINS.md) is defined. Identity currently
-implements pure principal values and lifecycle transitions. Application ports,
-transactional persistence and domain transport follow those leaves; audit and org
-are planned. Principal references alone confer no authentication or org authority.
+[Identity, audit and org ownership](DOMAINS.md) is defined. Identity implements
+authentication, persistence and transport; audit ingestion and org value leaves
+are also implemented. The org application port, transactional persistence and
+domain transport follow those leaves. Principal references alone confer no
+authentication or org authority.
 [Authentication](AUTHENTICATION.md) is required within identity, independent of an
 account/profile domain. Credential/session/challenge contracts precede their adapters.
 
@@ -17,7 +18,7 @@ compatibility nor the ability to extract a module into a service.
 These are review-held rules. There is no architecture checker yet. The foundations
 command composes the implemented shared modules; Nest's greeting remains an
 independent HTTP example at `src/root/`. Domain and application boundaries below
-become concrete with the first business module.
+are now concrete in the identity, audit and org domain slices.
 
 ## Dependency direction
 

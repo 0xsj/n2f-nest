@@ -1,6 +1,9 @@
 # Authentication storage shape
 
-**Stage:** logical schema for A01–A24, not a SQL migration. All tables below are
+**Stage:** logical schema for A01–A24; the identity migration and store implementing
+it are specified in [the store contract](../infra/postgres/CONTRACT.md). Upgrade
+tickets are migration version 5 and are issued and consumed through the same
+session/epoch recheck boundary. All tables below are
 identity-owned except the existing shared outbox. Concrete adapters own SQL and
 restore through validated domain values. Root supplies one complete migration ledger.
 

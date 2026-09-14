@@ -261,3 +261,100 @@ configured handler deadline), and /_examples/http/context (yields and returns th
 request scope ID before/after). These fixtures perform no external write and are
 not product endpoints. They establish cancellation, redaction and context evidence
 against the same native boundary used by the four normal examples.
+
+## Feature routes: methods, bodies, cookies and admission
+
+**Stage:** implemented and mutation-checked in every build on 2026-09-12 for the
+identity authentication routes; H01–H14 remain in force and the diagnostic routes
+keep their current behavior. This
+section extends the boundary beyond GET/HEAD without moving feature policy into
+it: which cookie, which origin, which CSRF rule and which principal belong to the
+feature transport that registers the route.
+
+### H15 — A route names its method and receives a bounded request value
+
+A route is registered with exactly one method from the H05 known set plus its
+path template; the same template may be registered under several methods. An
+unmatched template is 404; a matched template with an unregistered method is 405
+with an Allow header listing exactly the registered methods for that template.
+HEAD is served for every GET route without a body.
+
+The handler receives an immutable request value, never the framework request:
+the normalized method and registered template; the raw body bytes when the
+request carried a body, already bounded by the root's limit and already refused
+with the existing 413/415/408 overrides when oversized, not `application/json`,
+or not received within the timeout (a non-JSON body on a route that expects none
+is still 415; an absent body is an empty value, not an error); the selected
+request headers Origin, Content-Type, X-CSRF-Token and the agreed WebSocket
+subprotocol header, each as the list of values received; the Cookie header
+parsed into name → list of values, so a duplicated name is visible to the route
+owner rather than silently reduced; and a trusted source key derived at root from
+the peer address and the configured trusted-proxy policy (the boundary never
+trusts a forwarding header by itself). Query strings are exposed as raw text;
+this profile registers no route that reads one.
+
+Body decoding into a typed shape belongs to the route owner, using a strict
+decoder (unknown members refused, no duplicate keys, depth and size bounded by
+the already-enforced limit). The boundary does not parse JSON on the owner's
+behalf beyond the media-type refusal.
+
+### H16 — A route returns a response value
+
+The handler returns either a classified failure, projected exactly as H01–H02
+require, or a response value: a status from 200, 201, 202, 204 or 303; an
+optional JSON body (none for 204); and headers from a fixed allowlist:
+Cache-Control, Set-Cookie (a list), Allow, WWW-Authenticate, Retry-After and
+Location. Any other header name is a handler error (500) before commitment, not a
+silent drop. The boundary adds X-Request-ID and X-Correlation-ID as before. A handler cannot
+write the body itself, stream, hijack or upgrade; those remain separate handoff
+contracts. A handler or admission may also refuse with headers: a classified
+failure carrying allowlisted headers and a Set-Cookie list, which the boundary
+unwraps so the problem projection keeps the failure's classification while the
+headers and cookies are written (a 401 that clears a cookie, a 429 with
+Retry-After, a problem response marked no-store). A zero or negative Max-Age
+serializes as `Max-Age=0` and is the clearing form.
+
+Set-Cookie values are constructed by the route owner from a cookie value type
+that the boundary serializes: name, value (already encoded by the owner), Path,
+Max-Age or an explicit expiry, Secure, HttpOnly and SameSite. The boundary
+refuses a cookie whose name has the `__Host-` prefix without Secure, Path=/ and
+no Domain, and refuses control characters anywhere. It never logs a cookie value.
+
+### H17 — Admission runs after routing and before the scope opens
+
+A route may register an admission function. After the template and method are
+matched and before Open, the boundary calls it with the request value and a
+pre-scope context that carries the trace parent but no provenance scope. It
+returns either a refusal, an anonymous admission, or an authenticated admission
+carrying the initiator actor (and optional tenant) plus an opaque admitted value
+for the handler. Open then receives that attribution, so the request's provenance
+scope is entered with the established initiator and the root-supplied service
+executor (A19); no header can set it. The admitted value reaches the handler
+through the request value, never through a global.
+
+A refusal from admission is projected like any failure (401 for unauthenticated,
+403 for forbidden, 429 with the owner-supplied Retry-After for rate limits) and
+still receives the ordinary completion observation with the route template and
+the fixed `http.admission` provenance operation. Admission never runs for an
+unmatched route or a 405, and it runs at most once per request.
+
+### H18 — Completion facts do not change
+
+H06–H09 apply unchanged to feature routes: one completion log, one duration
+sample, one span end, first terminal facts win, and commitment is irreversible.
+A 4xx refusal from admission or a handler is `refused`; a handler failure is
+`failed`; the response status recorded is the one committed. Feature routes add
+no automatic request or response payload logging, and the boundary never places
+body bytes, cookies, tokens or header values in logs, spans or metrics.
+
+### H19 — Evidence for the extension
+
+Pure tests cover method matching and the Allow set, the body refusals, cookie
+parsing with duplicates and malformed pairs, the response-header allowlist, the
+`__Host-` cookie refusals and the admission ordering (admission before Open,
+never for 404/405, exactly once). Real adapter tests cover a POST with a bounded
+JSON body, a 204 with Set-Cookie, an admission refusal with observation, and an
+overlapping authenticated and anonymous request pair whose scopes carry different
+initiators. Selected mutations: Allow set omitted, duplicate cookie collapsed,
+admission after Open, header allowlist bypassed, admission run twice, and a
+cookie value reaching the completion log.

@@ -1,0 +1,13 @@
+{
+  "date": "2026-09-14",
+  "database": "PostgreSQL 18 disposable container",
+  "command": "python3 tools/verify_org_store.py",
+  "result": "passed",
+  "checks": [
+    "migration 6 applied",
+    "organization and initial owner membership created in one transaction",
+    "duplicate create mapped to org.organization_exists",
+    "integration test passed",
+    "database URL and sentinel redaction assertion passed"
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "language": "nest",
+  "caught": 7,
+  "selected": 7,
+  "exhaustive": false,
+  "evidence": ".",
+  "cases": [
+    {
+      "name": "allowlist_memory",
+      "file": "password-hash/phc.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "5b591d269dba55ac4574a5b6f44754b2e1a6b87f7b5510a6253f881de885bf78"
+    },
+    {
+      "name": "mismatch_as_corrupt",
+      "file": "password-hash/hasher.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "a18950bbdc202f30436e38cedb7deac95ac1cc334bd010b9911ec07ddd0d2bfd"
+    },
+    {
+      "name": "dummy_leaks",
+      "file": "password-hash/hasher.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "a18950bbdc202f30436e38cedb7deac95ac1cc334bd010b9911ec07ddd0d2bfd"
+    },
+    {
+      "name": "saturation_ignored",
+      "file": "password-hash/admission.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "e2a84108cc59ed4811514775cfb69c34bb5e8d813458fb5b86431544c15e8b9f"
+    },
+    {
+      "name": "digest_purpose_binding",
+      "file": "token-codec/index.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "292efb8ec7f243d17708663d14470e60e4b37aeba0cd56184b7d93722a1bbb4b"
+    },
+    {
+      "name": "noncanonical_accept",
+      "file": "token-codec/index.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "292efb8ec7f243d17708663d14470e60e4b37aeba0cd56184b7d93722a1bbb4b"
+    },
+    {
+      "name": "entropy_fallback",
+      "file": "token-codec/index.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "292efb8ec7f243d17708663d14470e60e4b37aeba0cd56184b7d93722a1bbb4b"
+    }
+  ],
+  "logs": [
+    "adapters_allowlist_memory.log",
+    "adapters_baseline.log",
+    "adapters_digest_purpose_binding.log",
+    "adapters_dummy_leaks.log",
+    "adapters_entropy_fallback.log",
+    "adapters_mismatch_as_corrupt.log",
+    "adapters_noncanonical_accept.log",
+    "adapters_restored.log",
+    "adapters_saturation_ignored.log"
+  ],
+  "verified_on": "2026-09-12"
+}

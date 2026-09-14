@@ -1,0 +1,14 @@
+{
+  "date": "2026-09-13",
+  "command": "python3 tools/mutations/limiter.py",
+  "language": "nest",
+  "selected": 3,
+  "caught": 3,
+  "exhaustive": false,
+  "cases": [
+    {"name": "subject_threshold_bypassed", "caught": true, "compiled": true},
+    {"name": "subject_digest_replaced_with_raw", "caught": true, "compiled": true},
+    {"name": "boundary_comparison_shifted", "caught": true, "compiled": true}
+  ],
+  "limits": ["selected live mutations, not an exhaustive score", "full ordinary suite evidence remains"]
+}

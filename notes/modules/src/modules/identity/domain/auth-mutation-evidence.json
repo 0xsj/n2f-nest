@@ -1,0 +1,62 @@
+{
+  "language": "nest",
+  "caught": 6,
+  "selected": 6,
+  "exhaustive": false,
+  "evidence": ".",
+  "cases": [
+    {
+      "name": "expiry_equality",
+      "file": "session.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "69742aae494d6f56e2ed30174583b9540ad8f33acb1f43ffe6213d055c530987"
+    },
+    {
+      "name": "purpose_confusion",
+      "file": "challenge.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "d4d0ab327cb72268c292d7a1617bc924ba8724cae026238a89f625094eb5779d"
+    },
+    {
+      "name": "replay",
+      "file": "challenge.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "d4d0ab327cb72268c292d7a1617bc924ba8724cae026238a89f625094eb5779d"
+    },
+    {
+      "name": "stale_version",
+      "file": "challenge.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "d4d0ab327cb72268c292d7a1617bc924ba8724cae026238a89f625094eb5779d"
+    },
+    {
+      "name": "revocation_check",
+      "file": "session.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "69742aae494d6f56e2ed30174583b9540ad8f33acb1f43ffe6213d055c530987"
+    },
+    {
+      "name": "secret_disclosure",
+      "file": "email.ts",
+      "caught": true,
+      "compiled": true,
+      "source_sha256": "72e915624d5d30b15220881919b327ec295acd9cb8c9a7eecaad723481fc1f2e"
+    }
+  ],
+  "logs": [
+    "auth_baseline.log",
+    "auth_expiry_equality.log",
+    "auth_purpose_confusion.log",
+    "auth_replay.log",
+    "auth_restored.log",
+    "auth_revocation_check.log",
+    "auth_secret_disclosure.log",
+    "auth_stale_version.log"
+  ],
+  "verified_on": "2026-09-12"
+}

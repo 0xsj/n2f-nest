@@ -1,8 +1,8 @@
 # Executable auth leaf decisions
 
 These details make A01–A09 executable without silently choosing different behavior
-in each language. Auth APIs are refusing scaffolds for the red specification stage;
-they are not implemented capabilities.
+in each language. The auth leaf APIs are implemented and pass these decisions in every build; they
+are pure values, not hashing, token generation, persistence or endpoints.
 
 - Login PasswordInput accepts 1..4096 UTF-8 bytes before NFC normalization; rejects
   malformed Unicode; normalization must remain within that bound. NewPassword also
@@ -47,5 +47,6 @@ they are not implemented capabilities.
 The checked-in fixture file is copied into each independent repo; no test reads a
 sibling repo. It defines portable scalar cases. Native tests cover malformed string
 representations, zero/forged values, snapshot ownership and lifecycle sequences.
-Negative cases preceded by refusing setup constructors will only reach their guard
-assertions once those constructors are implemented; red is not coverage evidence.
+Negative cases now reach their guard assertions because the setup constructors are
+implemented. The six selected mutations in `tools/mutations/auth.py` are this
+stage's targeted evidence, not a coverage score.
