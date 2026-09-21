@@ -1,0 +1,50 @@
+# Kulala / .http request file for the Jobs vertical slice.
+# Authenticate through identity.http and use an organization owner/admin token.
+
+@baseUrl = http://localhost:7300
+@sessionToken = replace-with-session-token
+@organizationId = replace-with-organization-id
+@jobId = replace-with-job-id
+
+### Submit a job
+POST {{baseUrl}}/organizations/{{organizationId}}/jobs
+Authorization: Bearer {{sessionToken}}
+Content-Type: application/json
+
+{
+  "kind": "document.process",
+  "maxAttempts": 3
+}
+
+### List jobs
+GET {{baseUrl}}/organizations/{{organizationId}}/jobs
+Authorization: Bearer {{sessionToken}}
+
+### Start a queued job
+POST {{baseUrl}}/organizations/{{organizationId}}/jobs/{{jobId}}/start
+Authorization: Bearer {{sessionToken}}
+
+### Fail a running job
+POST {{baseUrl}}/organizations/{{organizationId}}/jobs/{{jobId}}/fail
+Authorization: Bearer {{sessionToken}}
+Content-Type: application/json
+
+{
+  "failureCode": "provider.timeout"
+}
+
+### Retry a failed job
+POST {{baseUrl}}/organizations/{{organizationId}}/jobs/{{jobId}}/retry
+Authorization: Bearer {{sessionToken}}
+
+### Complete a running job
+POST {{baseUrl}}/organizations/{{organizationId}}/jobs/{{jobId}}/complete
+Authorization: Bearer {{sessionToken}}
+
+### Cancel a queued, running or failed job
+POST {{baseUrl}}/organizations/{{organizationId}}/jobs/{{jobId}}/cancel
+Authorization: Bearer {{sessionToken}}
+
+### Inspect Job facts projected by Audit
+GET {{baseUrl}}/audit/entries
+Authorization: Bearer {{sessionToken}}

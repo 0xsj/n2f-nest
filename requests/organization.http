@@ -1,0 +1,73 @@
+# Kulala / .http request file for the Organization vertical slice.
+# Run identity.http through login first and copy its session token below.
+
+@baseUrl = http://localhost:7300
+@sessionToken = replace-with-session-token
+@targetIdentityId = replace-with-target-identity-id
+@organizationName = Signals Artist Agency
+@organizationSlug = signals-agency
+
+### List organizations for the current identity
+GET {{baseUrl}}/organizations
+Authorization: Bearer {{sessionToken}}
+
+### Create an organization and become its owner
+POST {{baseUrl}}/organizations
+Authorization: Bearer {{sessionToken}}
+Content-Type: application/json
+
+{
+  "name": "{{organizationName}}",
+  "slug": "{{organizationSlug}}"
+}
+
+### List organizations again
+GET {{baseUrl}}/organizations
+Authorization: Bearer {{sessionToken}}
+
+### Attempt to change a membership role
+# The initial policy prevents changing the owner membership itself. A member
+# membership can be promoted by an owner once one exists.
+PATCH {{baseUrl}}/organizations/replace-with-organization-id/memberships/replace-with-membership-id/role
+Authorization: Bearer {{sessionToken}}
+Content-Type: application/json
+
+{
+  "role": "admin"
+}
+
+### Revoke a member
+DELETE {{baseUrl}}/organizations/replace-with-organization-id/memberships/replace-with-membership-id
+Authorization: Bearer {{sessionToken}}
+
+### Add an existing active Identity as a member
+# Run identity.http with a second account and copy its identity ID.
+POST {{baseUrl}}/organizations/replace-with-organization-id/memberships
+Authorization: Bearer {{sessionToken}}
+Content-Type: application/json
+
+{
+  "identityId": "{{targetIdentityId}}",
+  "role": "member"
+}
+
+### Create a pending invitation for an existing active Identity
+POST {{baseUrl}}/organizations/replace-with-organization-id/invitations
+Authorization: Bearer {{sessionToken}}
+Content-Type: application/json
+
+{
+  "identityId": "{{targetIdentityId}}",
+  "role": "member"
+}
+
+### Accept an invitation as the invited identity
+POST {{baseUrl}}/organizations/replace-with-organization-id/invitations/replace-with-invitation-id/accept
+Authorization: Bearer {{sessionToken}}
+
+### Revoke a pending invitation as the organization owner
+DELETE {{baseUrl}}/organizations/replace-with-organization-id/invitations/replace-with-invitation-id
+Authorization: Bearer {{sessionToken}}
+
+### Inspect organization events in Audit
+GET {{baseUrl}}/audit/entries

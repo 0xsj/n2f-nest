@@ -1,0 +1,68 @@
+# Kulala / .http request file for the Identity vertical slice.
+# Run the backend first: PORT=7300 bun run start:dev
+#
+# The in-memory adapter resets when the backend restarts. Run these requests
+# from top to bottom and copy response values into the variables below.
+
+@baseUrl = http://localhost:7300
+@email = demo@example.com
+@password = correct-horse-7
+@identityId = replace-with-identity-id
+@challengeId = replace-with-challenge-id
+@verificationToken = replace-with-verification-token
+@sessionToken = replace-with-session-token
+
+### Register an identity
+POST {{baseUrl}}/identity/register
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### Issue an email verification challenge
+# Copy identityId from the registration response above.
+POST {{baseUrl}}/identity/verification-challenges
+Content-Type: application/json
+
+{
+  "identityId": "{{identityId}}"
+}
+
+### Verify the identity
+# Copy challengeId and token from the challenge response above.
+POST {{baseUrl}}/identity/verify
+Content-Type: application/json
+
+{
+  "challengeId": "{{challengeId}}",
+  "token": "{{verificationToken}}"
+}
+
+### Login
+POST {{baseUrl}}/identity/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### Get the current identity
+# Copy token from the login response above.
+GET {{baseUrl}}/identity/me
+Authorization: Bearer {{sessionToken}}
+
+### Logout
+POST {{baseUrl}}/identity/logout
+Authorization: Bearer {{sessionToken}}
+
+### Confirm the session is revoked
+GET {{baseUrl}}/identity/me
+Authorization: Bearer {{sessionToken}}
+
+### Inspect the Audit projection
+# Identity events are consumed by Audit in-process and shown here without
+# importing Identity internals into the Audit module.
+GET {{baseUrl}}/audit/entries

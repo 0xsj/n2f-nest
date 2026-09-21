@@ -1,0 +1,42 @@
+# Kulala / .http request file for the Document vertical slice.
+# Authenticate through identity.http and use an organization member token.
+
+@baseUrl = http://localhost:7300
+@sessionToken = replace-with-session-token
+@organizationId = replace-with-organization-id
+@documentId = replace-with-document-id
+
+### Create an organization-owned document record
+POST {{baseUrl}}/organizations/{{organizationId}}/documents
+Authorization: Bearer {{sessionToken}}
+Content-Type: application/json
+
+{
+  "name": "Contract.pdf",
+  "storageKey": "documents/contract.pdf"
+}
+
+### List documents
+GET {{baseUrl}}/organizations/{{organizationId}}/documents
+Authorization: Bearer {{sessionToken}}
+
+### Get one document
+GET {{baseUrl}}/organizations/{{organizationId}}/documents/{{documentId}}
+Authorization: Bearer {{sessionToken}}
+
+### Request document processing as an owner or admin
+POST {{baseUrl}}/organizations/{{organizationId}}/documents/{{documentId}}/process
+Authorization: Bearer {{sessionToken}}
+Content-Type: application/json
+
+{
+  "maxAttempts": 3
+}
+
+### Archive a document as an owner or admin
+POST {{baseUrl}}/organizations/{{organizationId}}/documents/{{documentId}}/archive
+Authorization: Bearer {{sessionToken}}
+
+### Inspect Document facts projected by Audit
+GET {{baseUrl}}/audit/entries
+Authorization: Bearer {{sessionToken}}
