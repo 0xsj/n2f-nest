@@ -19,9 +19,11 @@
     "check": "bun run build && bun run lint && bun run test",
     "test": "vitest run",
     "test:organization": "N2F_RUN_ORGANIZATION_INTEGRATION=1 bun run test test/organization.integration.spec.ts",
+    "test:identity": "N2F_RUN_IDENTITY_INTEGRATION=1 bun run test test/identity.integration.spec.ts",
     "test:chaos": "N2F_RUN_CHAOS_INTEGRATION=1 bun run test test/chaos.integration.spec.ts",
-    "test:postgres": "N2F_RUN_POSTGRES_INTEGRATION=1 N2F_IDENTITY_STORAGE=postgres N2F_EVENT_TRANSPORT=local vitest run test/postgres.integration.spec.ts",
-    "test:nats": "N2F_RUN_POSTGRES_INTEGRATION=1 N2F_RUN_NATS_INTEGRATION=1 N2F_IDENTITY_STORAGE=postgres N2F_EVENT_TRANSPORT=nats vitest run --no-file-parallelism test/postgres.integration.spec.ts src/shared/events/nats/broker.integration.spec.ts",
+    "test:postgres": "N2F_RUN_POSTGRES_INTEGRATION=1 N2F_STORAGE=postgres N2F_EVENT_TRANSPORT=local vitest run test/postgres.integration.spec.ts",
+    "test:nats": "N2F_RUN_POSTGRES_INTEGRATION=1 N2F_RUN_NATS_INTEGRATION=1 N2F_STORAGE=postgres N2F_EVENT_TRANSPORT=nats N2F_NATS_STREAM=n2f_events N2F_NATS_SUBJECT_PREFIX=n2f.events. vitest run --no-file-parallelism test/postgres.integration.spec.ts src/shared/events/nats/broker.integration.spec.ts",
+    "test:e2e:persistent": "N2F_RUN_PERSISTENT_E2E=1 vitest run --no-file-parallelism test/persistent-e2e.integration.spec.ts",
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --no-file-parallelism"

@@ -120,11 +120,11 @@ describe('PostgresVerificationWriter', () => {
 
     expect(result).toEqual(ok(undefined));
     expect(database.client.queries).toHaveLength(3);
-    expect(database.client.queries[0]).toContain('UPDATE public.signals_identity_identities');
+    expect(database.client.queries[0]).toContain('UPDATE public.n2f_identity_identities');
     expect(database.client.queries[1]).toContain(
-      'UPDATE public.signals_identity_verification_challenges',
+      'UPDATE public.n2f_identity_verification_challenges',
     );
-    expect(database.client.queries[2]).toContain('signals_outbox');
+    expect(database.client.queries[2]).toContain('n2f_outbox');
   });
 });
 
@@ -163,8 +163,8 @@ describe('PostgreSQL session adapters', () => {
 
     expect(result).toEqual(ok(undefined));
     expect(database.client.queries).toHaveLength(2);
-    expect(database.client.queries[0]).toContain('signals_identity_sessions');
-    expect(database.client.queries[1]).toContain('signals_outbox');
+    expect(database.client.queries[0]).toContain('n2f_identity_sessions');
+    expect(database.client.queries[1]).toContain('n2f_outbox');
   });
 
   it('rehydrates a session by digest without querying raw token material', async () => {
@@ -204,8 +204,8 @@ describe('PostgreSQL session adapters', () => {
     expect(result).toEqual(ok(undefined));
     expect(database.client.queries).toHaveLength(2);
     expect(database.client.queries[0]).toContain(
-      'UPDATE public.signals_identity_sessions',
+      'UPDATE public.n2f_identity_sessions',
     );
-    expect(database.client.queries[1]).toContain('signals_outbox');
+    expect(database.client.queries[1]).toContain('n2f_outbox');
   });
 });

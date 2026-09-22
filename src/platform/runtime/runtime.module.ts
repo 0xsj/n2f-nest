@@ -28,6 +28,7 @@ import {
 import { OutboxWorker } from './outbox-worker.js';
 import { NatsEventWorker } from './nats-event-worker.js';
 import { Store as PostgresEventStore } from '../../shared/events/postgres/index.js';
+import { usesPostgres } from './storage.js';
 
 function brokerOrThrow(broker: Broker | undefined): Broker {
   if (!broker) throw new Error('NATS broker was not initialized');
@@ -64,7 +65,7 @@ export class PlatformRuntimeModule {
         {
           provide: DATABASE,
           useFactory: async (config: RuntimeConfig): Promise<Database | undefined> => {
-            if (config.identityStorage !== 'postgres' || !config.database) {
+            if (!usesPostgres(config) || !config.database) {
               return undefined;
             }
             const opened = await Database.open(config.database);
@@ -130,7 +131,7 @@ export class PlatformRuntimeModule {
             publisher: Publisher,
             ids: V7,
           ) =>
-            config.identityStorage === 'postgres' && store
+            usesPostgres(config) && store
               ? new OutboxDispatcher(store, publisher, ids)
               : undefined,
           inject: [

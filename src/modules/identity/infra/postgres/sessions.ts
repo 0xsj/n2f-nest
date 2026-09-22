@@ -79,7 +79,7 @@ export class PostgresSessionWriter implements SessionWriter {
 
       try {
         await transaction.query(
-          `INSERT INTO public.signals_identity_sessions
+          `INSERT INTO public.n2f_identity_sessions
             (id,identity_id,status,created_at,expires_at,revoked_at,token_digest)
            VALUES ($1::uuid,$2::uuid,$3,$4,$5,$6,$7)`,
           [
@@ -111,7 +111,7 @@ export class PostgresCurrentSessionReader implements CurrentSessionReader {
       try {
         const result = await transaction.query<SessionRow>(
           `SELECT id,identity_id,status,created_at,expires_at,revoked_at
-             FROM public.signals_identity_sessions
+             FROM public.n2f_identity_sessions
             WHERE token_digest=$1`,
           [digestToken(token).reveal()],
         );
@@ -143,7 +143,7 @@ export class PostgresSessionRevocationWriter
 
       try {
         const session = await transaction.query(
-          `UPDATE public.signals_identity_sessions
+          `UPDATE public.n2f_identity_sessions
               SET status=$2,revoked_at=$3
             WHERE id=$1::uuid`,
           [input.session.id, input.session.status, input.session.revokedAt],

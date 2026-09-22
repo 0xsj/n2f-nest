@@ -6,8 +6,10 @@ import { Factory as ProvenanceFactory } from '../../../shared/provenance/index.j
 import { EVENT_BUS, type EventBus } from '../../../platform/events/event-bus.js';
 import {
   DATABASE,
+  requireDatabase,
   RUNTIME_CONFIG,
   type RuntimeConfig,
+  usesPostgres,
 } from '../../../platform/runtime/index.js';
 import {
   AuthenticateIdentity,
@@ -74,13 +76,6 @@ const PORTS = {
   identityViewReader: Symbol('identity.identityViewReader'),
 } as const;
 
-function databaseOrThrow(database: Database | undefined) {
-  if (!database) {
-    throw new Error('PostgreSQL Identity storage was not initialized');
-  }
-  return database;
-}
-
 export const identityProviders: Provider[] = [
   {
     provide: InMemoryIdentityStore,
@@ -110,8 +105,8 @@ export const identityProviders: Provider[] = [
       database: Database | undefined,
       store: InMemoryIdentityStore,
     ) =>
-      config.identityStorage === 'postgres'
-        ? new PostgresRegistrationWriter(databaseOrThrow(database))
+      usesPostgres(config)
+        ? new PostgresRegistrationWriter(requireDatabase(database, 'Identity'))
         : new InMemoryRegistrationWriter(store),
     inject: [RUNTIME_CONFIG, DATABASE, InMemoryIdentityStore],
   },
@@ -122,8 +117,8 @@ export const identityProviders: Provider[] = [
       database: Database | undefined,
       store: InMemoryIdentityStore,
     ) =>
-      config.identityStorage === 'postgres'
-        ? new PostgresIdentityReader(databaseOrThrow(database))
+      usesPostgres(config)
+        ? new PostgresIdentityReader(requireDatabase(database, 'Identity'))
         : new InMemoryIdentityReader(store),
     inject: [RUNTIME_CONFIG, DATABASE, InMemoryIdentityStore],
   },
@@ -134,8 +129,8 @@ export const identityProviders: Provider[] = [
       database: Database | undefined,
       store: InMemoryIdentityStore,
     ) =>
-      config.identityStorage === 'postgres'
-        ? new PostgresCredentialAuthenticatorReader(databaseOrThrow(database))
+      usesPostgres(config)
+        ? new PostgresCredentialAuthenticatorReader(requireDatabase(database, 'Identity'))
         : new InMemoryCredentialAuthenticatorReader(store),
     inject: [RUNTIME_CONFIG, DATABASE, InMemoryIdentityStore],
   },
@@ -146,8 +141,8 @@ export const identityProviders: Provider[] = [
       database: Database | undefined,
       store: InMemoryIdentityStore,
     ) =>
-      config.identityStorage === 'postgres'
-        ? new PostgresVerificationChallengeReader(databaseOrThrow(database))
+      usesPostgres(config)
+        ? new PostgresVerificationChallengeReader(requireDatabase(database, 'Identity'))
         : new InMemoryVerificationChallengeReader(store),
     inject: [RUNTIME_CONFIG, DATABASE, InMemoryIdentityStore],
   },
@@ -158,8 +153,8 @@ export const identityProviders: Provider[] = [
       database: Database | undefined,
       store: InMemoryIdentityStore,
     ) =>
-      config.identityStorage === 'postgres'
-        ? new PostgresVerificationChallengeWriter(databaseOrThrow(database))
+      usesPostgres(config)
+        ? new PostgresVerificationChallengeWriter(requireDatabase(database, 'Identity'))
         : new InMemoryVerificationChallengeWriter(store),
     inject: [RUNTIME_CONFIG, DATABASE, InMemoryIdentityStore],
   },
@@ -170,8 +165,8 @@ export const identityProviders: Provider[] = [
       database: Database | undefined,
       store: InMemoryIdentityStore,
     ) =>
-      config.identityStorage === 'postgres'
-        ? new PostgresVerificationWriter(databaseOrThrow(database))
+      usesPostgres(config)
+        ? new PostgresVerificationWriter(requireDatabase(database, 'Identity'))
         : new InMemoryVerificationWriter(store),
     inject: [RUNTIME_CONFIG, DATABASE, InMemoryIdentityStore],
   },
@@ -182,8 +177,8 @@ export const identityProviders: Provider[] = [
       database: Database | undefined,
       store: InMemoryIdentityStore,
     ) =>
-      config.identityStorage === 'postgres'
-        ? new PostgresSessionWriter(databaseOrThrow(database))
+      usesPostgres(config)
+        ? new PostgresSessionWriter(requireDatabase(database, 'Identity'))
         : new InMemorySessionWriter(store),
     inject: [RUNTIME_CONFIG, DATABASE, InMemoryIdentityStore],
   },
@@ -194,8 +189,8 @@ export const identityProviders: Provider[] = [
       database: Database | undefined,
       store: InMemoryIdentityStore,
     ) =>
-      config.identityStorage === 'postgres'
-        ? new PostgresCurrentSessionReader(databaseOrThrow(database))
+      usesPostgres(config)
+        ? new PostgresCurrentSessionReader(requireDatabase(database, 'Identity'))
         : new InMemoryCurrentSessionReader(store),
     inject: [RUNTIME_CONFIG, DATABASE, InMemoryIdentityStore],
   },
@@ -206,8 +201,8 @@ export const identityProviders: Provider[] = [
       database: Database | undefined,
       store: InMemoryIdentityStore,
     ) =>
-      config.identityStorage === 'postgres'
-        ? new PostgresSessionRevocationWriter(databaseOrThrow(database))
+      usesPostgres(config)
+        ? new PostgresSessionRevocationWriter(requireDatabase(database, 'Identity'))
         : new InMemorySessionRevocationWriter(store),
     inject: [RUNTIME_CONFIG, DATABASE, InMemoryIdentityStore],
   },
@@ -218,8 +213,8 @@ export const identityProviders: Provider[] = [
       database: Database | undefined,
       store: InMemoryIdentityStore,
     ) =>
-      config.identityStorage === 'postgres'
-        ? new PostgresIdentityViewReader(databaseOrThrow(database))
+      usesPostgres(config)
+        ? new PostgresIdentityViewReader(requireDatabase(database, 'Identity'))
         : new InMemoryIdentityViewReader(store),
     inject: [RUNTIME_CONFIG, DATABASE, InMemoryIdentityStore],
   },

@@ -10,11 +10,11 @@ import { SecretString } from '../../shared/secret/index.js';
 import type { Lookup } from '../../shared/env/lookup.js';
 import type { Config as NatsConfig } from '../../shared/events/nats/index.js';
 
-export type IdentityStorage = 'memory' | 'postgres';
+export type StorageMode = 'memory' | 'postgres';
 export type EventTransport = 'local' | 'nats';
 
 export type RuntimeConfig = Readonly<{
-  identityStorage: IdentityStorage;
+  storage: StorageMode;
   eventTransport: EventTransport;
   database:
     | Readonly<{
@@ -30,19 +30,24 @@ export function parseRuntimeConfig(
   lookup: Lookup,
 ): Result<RuntimeConfig, Failure> {
   const reader = new Reader(lookup);
-  const identityStorage = reader.enumeration(
-    'N2F_IDENTITY_STORAGE',
+  // N2F_IDENTITY_STORAGE remains a compatibility alias for existing local
+  // environments; new deployments use the domain-neutral N2F_STORAGE name.
+  const storageKey = lookup('N2F_STORAGE') !== undefined
+    ? 'N2F_STORAGE'
+    : 'N2F_IDENTITY_STORAGE';
+  const storage = reader.enumeration(
+    storageKey,
     'memory',
     ['memory', 'postgres'],
-  ) as IdentityStorage;
+  ) as StorageMode;
   const eventTransport = reader.enumeration(
     'N2F_EVENT_TRANSPORT',
-    identityStorage === 'postgres' ? 'nats' : 'local',
+    storage === 'postgres' ? 'nats' : 'local',
     ['local', 'nats'],
   ) as EventTransport;
 
   let database: RuntimeConfig['database'];
-  if (identityStorage === 'postgres') {
+  if (storage === 'postgres') {
     database = {
       url: reader.secret('N2F_DATABASE_URL'),
       maxConnections: reader.int('N2F_DATABASE_MAX_CONNECTIONS', 10, 1, 64),
@@ -54,7 +59,12 @@ export function parseRuntimeConfig(
   if (eventTransport === 'nats') {
     nats = {
       url: reader.secret('N2F_NATS_URL'),
-      stream: reader.string('N2F_NATS_STREAM', 'signals'),
+      // The stream name is deployment-owned; n2f_events is the local target.
+      stream: reader.string('N2F_NATS_STREAM', 'n2f_events'),
+      subjectPrefix: reader.string(
+        'N2F_NATS_SUBJECT_PREFIX',
+        'n2f.events.',
+      ),
       consumer: reader.string('N2F_NATS_CONSUMER', 'audit'),
       timeoutMs: reader.int('N2F_NATS_TIMEOUT_MS', 1000, 1, 5000),
     };
@@ -63,11 +73,11 @@ export function parseRuntimeConfig(
   const valid = reader.check();
   if (!valid.ok) return err(valid.error);
 
-  if (eventTransport === 'nats' && identityStorage !== 'postgres') {
+  if (eventTransport === 'nats' && storage !== 'postgres') {
     return err(
       failure(
         'invalid',
-        'NATS event transport requires PostgreSQL identity storage',
+        'NATS event transport requires PostgreSQL storage',
         {
           type: 'env.invalid',
           fields: { N2F_EVENT_TRANSPORT: 'requires_postgres' },
@@ -76,7 +86,7 @@ export function parseRuntimeConfig(
     );
   }
 
-  return ok({ identityStorage, eventTransport, database, nats });
+  return ok({ storage, eventTransport, database, nats });
 }
 
 export function loadRuntimeConfig(): Result<RuntimeConfig, Failure> {

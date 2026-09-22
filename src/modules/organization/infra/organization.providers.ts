@@ -5,8 +5,10 @@ import type { Database } from '../../../shared/postgres/index.js';
 import { Factory as ProvenanceFactory } from '../../../shared/provenance/index.js';
 import {
   DATABASE,
+  requireDatabase,
   RUNTIME_CONFIG,
   type RuntimeConfig,
+  usesPostgres,
 } from '../../../platform/runtime/index.js';
 import {
   AddMembership,
@@ -62,13 +64,6 @@ const PORTS = {
   writer: Symbol('organization.writer'),
 } as const;
 
-function databaseOrThrow(database: Database | undefined): Database {
-  if (!database) {
-    throw new Error('PostgreSQL Organization storage was not initialized');
-  }
-  return database;
-}
-
 export const organizationProviders: Provider[] = [
   SystemClock,
   {
@@ -106,8 +101,8 @@ export const organizationProviders: Provider[] = [
       database: Database | undefined,
       store: InMemoryOrganizationStore,
     ) =>
-      config.identityStorage === 'postgres'
-        ? new PostgresMembershipReader(databaseOrThrow(database))
+      usesPostgres(config)
+        ? new PostgresMembershipReader(requireDatabase(database, 'Organization'))
         : new InMemoryMembershipReader(store),
     inject: [RUNTIME_CONFIG, DATABASE, InMemoryOrganizationStore],
   },
@@ -118,8 +113,8 @@ export const organizationProviders: Provider[] = [
       database: Database | undefined,
       inMemory: InMemoryMembershipWriter,
     ) =>
-      config.identityStorage === 'postgres'
-        ? new PostgresMembershipWriter(databaseOrThrow(database))
+      usesPostgres(config)
+        ? new PostgresMembershipWriter(requireDatabase(database, 'Organization'))
         : inMemory,
     inject: [RUNTIME_CONFIG, DATABASE, InMemoryMembershipWriter],
   },
@@ -130,8 +125,8 @@ export const organizationProviders: Provider[] = [
       database: Database | undefined,
       store: InMemoryOrganizationStore,
     ) =>
-      config.identityStorage === 'postgres'
-        ? new PostgresInvitationReader(databaseOrThrow(database))
+      usesPostgres(config)
+        ? new PostgresInvitationReader(requireDatabase(database, 'Organization'))
         : new InMemoryInvitationReader(store),
     inject: [RUNTIME_CONFIG, DATABASE, InMemoryOrganizationStore],
   },
@@ -142,8 +137,8 @@ export const organizationProviders: Provider[] = [
       database: Database | undefined,
       inMemory: InMemoryInvitationWriter,
     ) =>
-      config.identityStorage === 'postgres'
-        ? new PostgresInvitationWriter(databaseOrThrow(database))
+      usesPostgres(config)
+        ? new PostgresInvitationWriter(requireDatabase(database, 'Organization'))
         : inMemory,
     inject: [RUNTIME_CONFIG, DATABASE, InMemoryInvitationWriter],
   },
@@ -154,8 +149,8 @@ export const organizationProviders: Provider[] = [
       database: Database | undefined,
       inMemory: InMemoryInvitationAcceptanceWriter,
     ) =>
-      config.identityStorage === 'postgres'
-        ? new PostgresInvitationAcceptanceWriter(databaseOrThrow(database))
+      usesPostgres(config)
+        ? new PostgresInvitationAcceptanceWriter(requireDatabase(database, 'Organization'))
         : inMemory,
     inject: [RUNTIME_CONFIG, DATABASE, InMemoryInvitationAcceptanceWriter],
   },
@@ -166,8 +161,8 @@ export const organizationProviders: Provider[] = [
       database: Database | undefined,
       store: InMemoryOrganizationStore,
     ) =>
-      config.identityStorage === 'postgres'
-        ? new PostgresOrganizationReader(databaseOrThrow(database))
+      usesPostgres(config)
+        ? new PostgresOrganizationReader(requireDatabase(database, 'Organization'))
         : new InMemoryOrganizationReader(store),
     inject: [RUNTIME_CONFIG, DATABASE, InMemoryOrganizationStore],
   },
@@ -178,8 +173,8 @@ export const organizationProviders: Provider[] = [
       database: Database | undefined,
       inMemory: InMemoryOrganizationWriter,
     ) =>
-      config.identityStorage === 'postgres'
-        ? new PostgresOrganizationWriter(databaseOrThrow(database))
+      usesPostgres(config)
+        ? new PostgresOrganizationWriter(requireDatabase(database, 'Organization'))
         : inMemory,
     inject: [RUNTIME_CONFIG, DATABASE, InMemoryOrganizationWriter],
   },

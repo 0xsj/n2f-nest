@@ -31,7 +31,7 @@ export class PostgresOrganizationWriter implements OrganizationWriter {
 
       try {
         await transaction.query(
-          `INSERT INTO public.signals_organization_organizations
+          `INSERT INTO public.n2f_organization_organizations
             (id,name,slug,status,created_at,updated_at)
            VALUES ($1::uuid,$2,$3,$4,$5,$6)`,
           [
@@ -45,7 +45,7 @@ export class PostgresOrganizationWriter implements OrganizationWriter {
         );
 
         await transaction.query(
-          `INSERT INTO public.signals_organization_memberships
+          `INSERT INTO public.n2f_organization_memberships
             (id,organization_id,identity_id,role,status,created_at,updated_at,revoked_at)
            VALUES ($1::uuid,$2::uuid,$3::uuid,$4,$5,$6,$7,$8)`,
           [

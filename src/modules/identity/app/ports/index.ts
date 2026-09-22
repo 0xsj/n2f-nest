@@ -1,5 +1,9 @@
 export type { PasswordHasher } from './password-hasher.js';
-export type { PasswordPolicy } from './password-policy.js';
+export {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+  type PasswordPolicy,
+} from './password-policy.js';
 export type { RegistrationWriter } from './registration-writer.js';
 export type { IdentityReader } from './identity-reader.js';
 export type { CurrentSessionReader } from './current-session-reader.js';

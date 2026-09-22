@@ -97,8 +97,8 @@ export class PostgresOrganizationReader implements OrganizationReader {
              m.created_at AS membership_created_at,
              m.updated_at AS membership_updated_at,
              m.revoked_at AS membership_revoked_at
-           FROM public.signals_organization_memberships m
-           JOIN public.signals_organization_organizations o
+           FROM public.n2f_organization_memberships m
+           JOIN public.n2f_organization_organizations o
              ON o.id=m.organization_id
           WHERE m.identity_id=$1::uuid
             AND m.status='active'

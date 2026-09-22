@@ -37,7 +37,7 @@ async function insert(
 ): Promise<Result<void, Failure>> {
   try {
     const result = await transaction.query(
-      'INSERT INTO public.signals_' +
+      'INSERT INTO public.n2f_' +
         table +
         ' AS t(event_id,envelope) VALUES($1::uuid,$2) ON CONFLICT(event_id) DO UPDATE SET envelope=t.envelope WHERE t.envelope::jsonb=excluded.envelope::jsonb',
       [event.id, Buffer.from(event.bytes()).toString()],
@@ -61,11 +61,11 @@ export class Store {
     if (!valid.ok) return valid;
     return this.database.transaction(async (transaction) => {
       await transaction.query(
-        "UPDATE public.signals_outbox SET state='dead',lease=NULL,lease_until=NULL WHERE state='pending' AND attempts=5 AND (lease_until IS NULL OR lease_until<=clock_timestamp())",
+        "UPDATE public.n2f_outbox SET state='dead',lease=NULL,lease_until=NULL WHERE state='pending' AND attempts=5 AND (lease_until IS NULL OR lease_until<=clock_timestamp())",
       );
       const row = (
         await transaction.query<{ envelope: string; attempts: number }>(
-          "WITH candidate AS (SELECT event_id FROM public.signals_outbox WHERE state='pending' AND attempts<5 AND available_at<=clock_timestamp() AND (lease_until IS NULL OR lease_until<=clock_timestamp()) ORDER BY available_at,event_id FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE public.signals_outbox o SET lease=$1::uuid,lease_until=clock_timestamp()+interval '30 seconds',attempts=o.attempts+1 FROM candidate c WHERE o.event_id=c.event_id RETURNING o.envelope::text,o.attempts",
+          "WITH candidate AS (SELECT event_id FROM public.n2f_outbox WHERE state='pending' AND attempts<5 AND available_at<=clock_timestamp() AND (lease_until IS NULL OR lease_until<=clock_timestamp()) ORDER BY available_at,event_id FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE public.n2f_outbox o SET lease=$1::uuid,lease_until=clock_timestamp()+interval '30 seconds',attempts=o.attempts+1 FROM candidate c WHERE o.event_id=c.event_id RETURNING o.envelope::text,o.attempts",
           [token],
         )
       ).rows[0];
@@ -94,7 +94,7 @@ export class Store {
         ? "'sent'"
         : "CASE WHEN attempts>=5 THEN 'dead' ELSE 'pending' END";
       const result = await transaction.query(
-        'UPDATE public.signals_outbox SET state=' +
+        'UPDATE public.n2f_outbox SET state=' +
           state +
           ",lease=NULL,lease_until=NULL,available_at=clock_timestamp()+interval '100 milliseconds' WHERE event_id=$1::uuid AND lease=$2::uuid AND state='pending' AND lease_until>clock_timestamp()",
         [lease.event.id, lease.token],
@@ -175,12 +175,12 @@ export class Mailbox implements Publisher {
     let rejected: Failure | undefined;
     const result = await this.database.transaction(async (transaction, signal) => {
       await transaction.query(
-        'INSERT INTO public.signals_mailbox_receipts(event_id,consumer) SELECT event_id,$1 FROM public.signals_mailbox ON CONFLICT(event_id,consumer) DO NOTHING',
+        'INSERT INTO public.n2f_mailbox_receipts(event_id,consumer) SELECT event_id,$1 FROM public.n2f_mailbox ON CONFLICT(event_id,consumer) DO NOTHING',
         [consumer],
       );
       const row = (
         await transaction.query<{ envelope: string; attempts: number }>(
-          "SELECT m.envelope::text,r.attempts FROM public.signals_mailbox m JOIN public.signals_mailbox_receipts r ON r.event_id=m.event_id WHERE r.consumer=$1 AND r.state='pending' AND r.attempts<5 AND r.available_at<=clock_timestamp() ORDER BY r.available_at,m.event_id FOR UPDATE OF m,r SKIP LOCKED LIMIT 1",
+          "SELECT m.envelope::text,r.attempts FROM public.n2f_mailbox m JOIN public.n2f_mailbox_receipts r ON r.event_id=m.event_id WHERE r.consumer=$1 AND r.state='pending' AND r.attempts<5 AND r.available_at<=clock_timestamp() ORDER BY r.available_at,m.event_id FOR UPDATE OF m,r SKIP LOCKED LIMIT 1",
           [consumer],
         )
       ).rows[0];
@@ -188,25 +188,25 @@ export class Mailbox implements Publisher {
 
       const event = Envelope.decode(Buffer.from(row.envelope));
       if (!event.ok) return event;
-      await transaction.query('SAVEPOINT signals_consumer');
+      await transaction.query('SAVEPOINT n2f_consumer');
       try {
         const handled = await fn(transaction, event.value, signal);
         if (!handled.ok) {
           rejected = handled.error;
-          await transaction.query('ROLLBACK TO SAVEPOINT signals_consumer');
+          await transaction.query('ROLLBACK TO SAVEPOINT n2f_consumer');
         }
       } catch (error) {
         rejected = map(error);
-        await transaction.query('ROLLBACK TO SAVEPOINT signals_consumer');
+        await transaction.query('ROLLBACK TO SAVEPOINT n2f_consumer');
       }
-      await transaction.query('RELEASE SAVEPOINT signals_consumer');
+      await transaction.query('RELEASE SAVEPOINT n2f_consumer');
       const state = !rejected
         ? 'processed'
         : row.attempts + 1 >= 5
           ? 'dead'
           : 'pending';
       await transaction.query(
-        "UPDATE public.signals_mailbox_receipts SET state=$3,attempts=attempts+1,available_at=clock_timestamp()+interval '100 milliseconds' WHERE event_id=$1::uuid AND consumer=$2",
+        "UPDATE public.n2f_mailbox_receipts SET state=$3,attempts=attempts+1,available_at=clock_timestamp()+interval '100 milliseconds' WHERE event_id=$1::uuid AND consumer=$2",
         [event.value.id, consumer, state],
       );
       return ok(true);

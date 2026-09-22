@@ -81,7 +81,7 @@ export class PostgresJobReader implements JobReader {
     return this.database.transaction(async (transaction) => {
       try {
         const result = await transaction.query<JobRow>(
-          `SELECT ${columns} FROM public.signals_jobs_jobs WHERE id=$1::uuid`,
+          `SELECT ${columns} FROM public.n2f_jobs_jobs WHERE id=$1::uuid`,
           [id],
         );
         return result.rows[0] ? restore(result.rows[0]) : ok(null);
@@ -101,7 +101,7 @@ export class PostgresJobReader implements JobReader {
       try {
         const result = await transaction.query<JobRow>(
           `SELECT ${columns}
-             FROM public.signals_jobs_jobs
+             FROM public.n2f_jobs_jobs
             WHERE organization_id=$1::uuid
               AND kind=$2
               AND subject_type=$3
@@ -125,7 +125,7 @@ export class PostgresJobReader implements JobReader {
       try {
         const result = await transaction.query<JobRow>(
           `SELECT ${columns}
-             FROM public.signals_jobs_jobs
+             FROM public.n2f_jobs_jobs
             WHERE organization_id=$1::uuid
             ORDER BY created_at,id`,
           [organizationId],

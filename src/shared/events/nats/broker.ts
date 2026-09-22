@@ -23,8 +23,13 @@ export type Config = {
   stream: string;
   consumer: string;
   timeoutMs: number;
+  /** Target defaults to n2f.events.; legacy deployments can override it. */
+  subjectPrefix?: string;
   consumerDeliverPolicy?: 'all' | 'new';
 };
+
+const DEFAULT_SUBJECT_PREFIX = 'n2f.events.';
+const SUBJECT_PREFIX_PATTERN = /^[A-Za-z0-9_]{1,40}\.[A-Za-z0-9_]{1,40}\.$/;
 
 const unavailable = () =>
   failure('unavailable', 'JetStream operation incomplete', {
@@ -59,7 +64,8 @@ export class Broker implements Publisher {
     private readonly connection: NatsConnection,
     private readonly config: Config,
   ) {
-    this.#subject = 'signals.events.' + config.stream;
+    this.#subject =
+      (config.subjectPrefix ?? DEFAULT_SUBJECT_PREFIX) + config.stream;
   }
 
   static async open(config: Config): Promise<Result<Broker, Failure>> {
@@ -75,6 +81,8 @@ export class Broker implements Publisher {
         url.pathname ||
         !/^[A-Za-z0-9_]{1,40}$/.test(config.stream) ||
         !/^[A-Za-z0-9_]{1,40}$/.test(config.consumer) ||
+        (config.subjectPrefix !== undefined &&
+          !SUBJECT_PREFIX_PATTERN.test(config.subjectPrefix)) ||
         !Number.isInteger(config.timeoutMs) ||
         config.timeoutMs < 1 ||
         config.timeoutMs > 5000

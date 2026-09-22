@@ -116,13 +116,13 @@ describe('PostgresRegistrationWriter', () => {
     expect(result).toEqual(ok(undefined));
     expect(database.client.queries).toHaveLength(3);
     expect(database.client.queries[0]?.text).toContain(
-      'signals_identity_identities',
+      'n2f_identity_identities',
     );
     expect(database.client.queries[1]?.text).toContain(
-      'signals_identity_credentials',
+      'n2f_identity_credentials',
     );
     expect(database.client.queries[1]?.values).toContain('scrypt-v1$test$hash');
-    expect(database.client.queries[2]?.text).toContain('signals_outbox');
+    expect(database.client.queries[2]?.text).toContain('n2f_outbox');
   });
 
   it('rejects an event whose provenance does not match the write', async () => {

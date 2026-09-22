@@ -1,13 +1,11 @@
 # Organization infrastructure layer
 
-The first adapter is process-local: `InMemoryOrganizationWriter` owns the
-commit boundary and `IdentityCurrentActorReader` adapts Identity's current
-identity query to the Organization-owned actor port. Neither adapter leaks
-into the Organization or Membership domain objects.
-
-The next adapter should implement the same `OrganizationWriter` port with a
-single PostgreSQL transaction for the organization row, owner membership and
-outbox events.
+The process-local and PostgreSQL adapters implement the same application
+ports. `InMemoryOrganizationWriter` owns the local commit boundary, while
+`PostgresOrganizationWriter` uses one transaction for the organization row,
+owner membership and outbox events. `IdentityCurrentActorReader` adapts
+Identity's current-identity query to the Organization-owned actor port.
+Neither adapter leaks into the Organization or Membership domain objects.
 
 Membership role changes use separate reader and writer ports. Both in-memory
 and PostgreSQL writers update the immutable membership state and enqueue the
@@ -39,3 +37,7 @@ PostgreSQL outbox transaction and the in-memory rollback behavior.
 The same writer also inserts a new membership when its ID is not yet present.
 That keeps membership creation and role transitions behind one application
 port without making the command know which persistence operation is required.
+
+Adapter contract tests cover the organization pair, membership and invitation
+rehydration, multi-event provenance checks, invitation acceptance, rollback on
+event failure and safe database failure mapping.

@@ -75,7 +75,7 @@ function entryFrom(row: AuditRow): Result<AuditEntry, Failure> {
 
 const selectByEvent = `SELECT id,event_id,event_type,occurred_at,recorded_at,
     work_context,subject_kind,subject_id
-  FROM public.signals_audit_entries WHERE event_id=$1::uuid`;
+  FROM public.n2f_audit_entries WHERE event_id=$1::uuid`;
 
 export class PostgresAuditEntryWriter implements AuditEntryWriter {
   constructor(private readonly database: TransactionDatabase) {}
@@ -88,7 +88,7 @@ export class PostgresAuditEntryWriter implements AuditEntryWriter {
       try {
         const subject = entry.subject;
         const inserted = await transaction.query(
-          `INSERT INTO public.signals_audit_entries
+          `INSERT INTO public.n2f_audit_entries
             (id,event_id,event_type,occurred_at,recorded_at,work_context,subject_kind,subject_id)
            VALUES ($1::uuid,$2::uuid,$3,$4,$5,$6::jsonb,$7,$8::uuid)
            ON CONFLICT (event_id) DO NOTHING`,
@@ -136,7 +136,7 @@ export class PostgresAuditEntryReader implements AuditEntryReader {
         const result = await transaction.query<AuditRow>(
           `SELECT id,event_id,event_type,occurred_at,recorded_at,
                   work_context,subject_kind,subject_id
-             FROM public.signals_audit_entries
+             FROM public.n2f_audit_entries
             ORDER BY recorded_at,event_id`,
         );
         const entries: AuditEntry[] = [];

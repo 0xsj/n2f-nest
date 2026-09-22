@@ -118,6 +118,7 @@ function command(): AuthenticateIdentityCommand {
 function setup() {
   const identity = activeIdentity();
   const credential = activeCredential();
+  let verifyCalls = 0;
   let committed:
     | Readonly<{
         session: Session;
@@ -147,11 +148,13 @@ function setup() {
           : ok(null),
     } satisfies CredentialAuthenticatorReader,
     passwords: {
-      verify: async (password, hash) =>
-        ok(
+      verify: async (password, hash) => {
+        verifyCalls += 1;
+        return ok(
           password.reveal() === 'correct horse battery staple' &&
             hash.reveal() === 'stored-hash',
-        ),
+        );
+      },
     } satisfies PasswordVerifier,
     sessions: {
       expiresAt: () => ok(expiresAt),
@@ -166,7 +169,7 @@ function setup() {
     writer,
   });
 
-  return { getCommitted: () => committed, useCase };
+  return { getCommitted: () => committed, getVerifyCalls: () => verifyCalls, useCase };
 }
 
 describe('AuthenticateIdentity', () => {
@@ -222,5 +225,22 @@ describe('AuthenticateIdentity', () => {
     }
 
     expect(result.error.type).toBe('identity.invalid_credentials');
+  });
+
+  it('rejects oversized passwords before invoking the verifier', async () => {
+    const { getVerifyCalls, useCase } = setup();
+    const result = await useCase.execute({
+      ...command(),
+      password: new SecretString('x'.repeat(1025)),
+    });
+
+    expect(result.ok).toBe(false);
+
+    if (result.ok) {
+      return;
+    }
+
+    expect(result.error.type).toBe('identity.invalid_credentials');
+    expect(getVerifyCalls()).toBe(0);
   });
 });

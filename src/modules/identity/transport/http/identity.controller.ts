@@ -8,6 +8,7 @@ import {
   HttpCode,
   Post,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import {
   err,
   failure,
@@ -18,6 +19,7 @@ import {
 import { problemOf } from '../../../../shared/http/index.js';
 import { parse } from '../../../../shared/id/index.js';
 import { SecretString } from '../../../../shared/secret/index.js';
+import { RateLimit } from '../../../../platform/ratelimit/index.js';
 import {
   AuthenticateIdentity,
   GetCurrentIdentity,
@@ -29,6 +31,43 @@ import {
 import { IdentityHttpWork } from './work.js';
 
 type BodyObject = Record<string, unknown>;
+
+function clientKey(request: Request): string {
+  return request.ip || request.socket.remoteAddress || 'unknown';
+}
+
+function bodyKey(request: Request, field: string): string {
+  const value = request.body?.[field];
+  return typeof value === 'string' ? value.trim().toLowerCase().slice(0, 254) : 'unknown';
+}
+
+const REGISTER_LIMIT = {
+  name: 'identity.register',
+  limit: 5,
+  windowMs: 10 * 60 * 1000,
+  key: clientKey,
+} as const;
+
+const LOGIN_LIMIT = {
+  name: 'identity.login',
+  limit: 10,
+  windowMs: 60 * 1000,
+  key: (request: Request) => `${clientKey(request)}:${bodyKey(request, 'email')}`,
+} as const;
+
+const CHALLENGE_LIMIT = {
+  name: 'identity.verification_challenge',
+  limit: 5,
+  windowMs: 10 * 60 * 1000,
+  key: (request: Request) => `${clientKey(request)}:${bodyKey(request, 'identityId')}`,
+} as const;
+
+const VERIFY_LIMIT = {
+  name: 'identity.verify',
+  limit: 10,
+  windowMs: 10 * 60 * 1000,
+  key: (request: Request) => `${clientKey(request)}:${bodyKey(request, 'challengeId')}`,
+} as const;
 
 function objectBody(value: unknown): Result<BodyObject, Failure> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -94,6 +133,7 @@ export class IdentityController {
   ) {}
 
   @Post('register')
+  @RateLimit(REGISTER_LIMIT)
   @HttpCode(HttpStatus.CREATED)
   async registerIdentity(@Body() rawBody: unknown) {
     const body = respond(exactStrings(rawBody, ['email', 'password']));
@@ -106,6 +146,7 @@ export class IdentityController {
   }
 
   @Post('verification-challenges')
+  @RateLimit(CHALLENGE_LIMIT)
   @HttpCode(HttpStatus.CREATED)
   async issueVerificationChallenge(@Body() rawBody: unknown) {
     const body = respond(exactStrings(rawBody, ['identityId']));
@@ -124,6 +165,7 @@ export class IdentityController {
   }
 
   @Post('verify')
+  @RateLimit(VERIFY_LIMIT)
   async verifyIdentity(@Body() rawBody: unknown) {
     const body = respond(exactStrings(rawBody, ['challengeId', 'token']));
     const challengeId = respond(parse(body.challengeId));
@@ -135,6 +177,7 @@ export class IdentityController {
   }
 
   @Post('login')
+  @RateLimit(LOGIN_LIMIT)
   async login(@Body() rawBody: unknown) {
     const body = respond(exactStrings(rawBody, ['email', 'password']));
     const value = respond(await this.authenticate.execute({

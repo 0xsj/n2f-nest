@@ -33,7 +33,7 @@ export class PostgresVerificationChallengeWriter
 
       try {
         await transaction.query(
-          `INSERT INTO public.signals_identity_verification_challenges
+          `INSERT INTO public.n2f_identity_verification_challenges
             (id,identity_id,purpose,status,issued_at,expires_at,consumed_at,token_digest)
            VALUES ($1::uuid,$2::uuid,$3,$4,$5,$6,$7,$8)`,
           [

@@ -70,7 +70,7 @@ The local bus is deliberately not durable and returns `durable: false` in its
 receipt. The event remains in the Identity process-local event collection for
 inspection; production delivery needs the existing outbox and NATS adapters.
 
-When `N2F_IDENTITY_STORAGE=postgres`, Audit switches to a PostgreSQL projection
+When `N2F_STORAGE=postgres`, Audit switches to a PostgreSQL projection
 with a unique source-event constraint. The local outbox worker still uses the
 in-process subscriber as its delivery target, so the complete local durable
 path is PostgreSQL state → PostgreSQL outbox → in-process event bus →
@@ -83,7 +83,10 @@ Event delivery can be retried. `InMemoryAuditEntryWriter` checks the source
 event ID before adding an entry and returns the existing entry with
 `created: false` when it has already been projected. This behavior belongs at
 the consumer-owned write boundary, where a durable implementation can enforce
-the same rule with a unique constraint.
+the same rule with a unique constraint. The adapter contract suite verifies
+that memory and PostgreSQL-shaped writers return the original projection on a
+duplicate event, while readers rehydrate provenance and subjects and map
+database failures to safe Result values.
 
 ## Provenance
 

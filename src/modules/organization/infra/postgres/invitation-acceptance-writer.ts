@@ -19,7 +19,7 @@ export class PostgresInvitationAcceptanceWriter implements InvitationAcceptanceW
 
       try {
         const accepted = await transaction.query(
-          `UPDATE public.signals_organization_invitations
+          `UPDATE public.n2f_organization_invitations
               SET status='accepted',updated_at=$2,accepted_at=$2
             WHERE id=$1::uuid AND status='pending'`,
           [input.invitation.id, input.invitation.updatedAt],
@@ -33,7 +33,7 @@ export class PostgresInvitationAcceptanceWriter implements InvitationAcceptanceW
         }
 
         await transaction.query(
-          `INSERT INTO public.signals_organization_memberships
+          `INSERT INTO public.n2f_organization_memberships
             (id,organization_id,identity_id,role,status,created_at,updated_at,revoked_at)
            VALUES ($1::uuid,$2::uuid,$3::uuid,$4,'active',$5,$5,NULL)`,
           [

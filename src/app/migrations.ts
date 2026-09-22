@@ -20,6 +20,7 @@ import {
   invitationsMigration as organizationInvitationsMigration,
   migration as organizationMigration,
 } from '../modules/organization/infra/postgres/index.js';
+import { namespaceMigration } from './migrations/namespace.js';
 
 export const appMigrations = [
   eventsMigration(1),
@@ -34,4 +35,5 @@ export const appMigrations = [
   jobsMigration(10),
   jobsSubjectMigration(11),
   documentProcessingMigration(12),
+  namespaceMigration(13),
 ] as const;

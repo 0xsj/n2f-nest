@@ -69,9 +69,12 @@ integration('NATS JetStream delivery', () => {
     if (!url) throw new Error('N2F_NATS_URL is required');
 
     const suffix = Date.now().toString(36);
+    const stream = process.env.N2F_NATS_STREAM ?? 'signals';
+    const subjectPrefix = process.env.N2F_NATS_SUBJECT_PREFIX;
     const opened = await Broker.open({
       url: new SecretString(url),
-      stream: 'signals',
+      stream,
+      subjectPrefix,
       consumer: `retry_${suffix}`,
       timeoutMs: 2000,
       consumerDeliverPolicy: 'new',
@@ -117,9 +120,12 @@ integration('NATS JetStream delivery', () => {
     if (!url) throw new Error('N2F_NATS_URL is required');
 
     const suffix = Date.now().toString(36);
+    const stream = process.env.N2F_NATS_STREAM ?? 'signals';
+    const subjectPrefix = process.env.N2F_NATS_SUBJECT_PREFIX;
     const opened = await Broker.open({
       url: new SecretString(url),
-      stream: 'signals',
+      stream,
+      subjectPrefix,
       consumer: `chaos_${suffix}`,
       timeoutMs: 2000,
       consumerDeliverPolicy: 'new',

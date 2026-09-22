@@ -60,6 +60,8 @@ the Nest composition, adapter seams and curlable flow.
 - email verification
 - session creation with revocable, expiring sessions
 - password verification and session-token issuance through ports
+- bounded password policy: 8–1024 characters at registration, with oversized
+  login inputs refused before password-verifier work
 - current-Identity read projection through the query layer
 - idempotent logout through session revocation
 - authentication and session creation
@@ -79,4 +81,13 @@ the Nest composition, adapter seams and curlable flow.
 - credential material, session tokens and recovery secrets never enter domain events
 - expected domain refusals use `Result` values with typed Identity failure
   unions; adapter failures are normalized at application boundaries
+- password bounds, session duration and verification duration are Identity
+  policy; hashing, token generation and token digesting remain infrastructure
+  adapters behind narrow ports
 - Audit consumes published business facts without importing Identity internals
+
+The focused HTTP contract is available through `bun run test:identity`. It
+covers missing bearer credentials, empty-password rejection, uniform invalid
+credential responses, session revocation and the complete local Identity to
+Audit projection. The PostgreSQL/NATS integration exercises the same lifecycle
+through the durable outbox and JetStream path.

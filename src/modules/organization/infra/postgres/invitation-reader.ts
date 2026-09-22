@@ -56,7 +56,7 @@ export class PostgresInvitationReader implements InvitationReader {
       try {
         const result = await transaction.query<InvitationRow>(
           `SELECT id,organization_id,identity_id,role,status,created_at,updated_at,expires_at,accepted_at,revoked_at
-             FROM public.signals_organization_invitations
+             FROM public.n2f_organization_invitations
             WHERE id=$1::uuid`,
           [invitationId],
         );
@@ -77,7 +77,7 @@ export class PostgresInvitationReader implements InvitationReader {
       try {
         const result = await transaction.query<InvitationRow>(
           `SELECT id,organization_id,identity_id,role,status,created_at,updated_at,expires_at,accepted_at,revoked_at
-             FROM public.signals_organization_invitations
+             FROM public.n2f_organization_invitations
             WHERE organization_id=$1::uuid AND identity_id=$2::uuid AND status='pending'
             ORDER BY created_at DESC LIMIT 1`,
           [organizationId, identityId],

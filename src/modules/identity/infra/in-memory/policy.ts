@@ -1,14 +1,29 @@
 import { err, failure, ok, type Failure, type Result } from '../../../../shared/errors/index.js';
-import type { PasswordPolicy, SessionPolicy, VerificationPolicy } from '../../app/ports/index.js';
+import {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+  type PasswordPolicy,
+  type SessionPolicy,
+  type VerificationPolicy,
+} from '../../app/ports/index.js';
 import type { SecretString } from '../../../../shared/secret/index.js';
 
 export class DefaultPasswordPolicy implements PasswordPolicy {
   validate(password: SecretString): Result<void, Failure> {
-    if (password.reveal().length < 8) {
-      return err(failure('invalid', 'password must be at least 8 characters', {
+    const length = password.reveal().length;
+
+    if (length < PASSWORD_MIN_LENGTH) {
+      return err(failure('invalid', `password must be at least ${PASSWORD_MIN_LENGTH} characters`, {
         type: 'identity.password_too_short',
       }));
     }
+
+    if (length > PASSWORD_MAX_LENGTH) {
+      return err(failure('invalid', `password must be at most ${PASSWORD_MAX_LENGTH} characters`, {
+        type: 'identity.password_too_long',
+      }));
+    }
+
     return ok(undefined);
   }
 }

@@ -9,7 +9,7 @@ describe('runtime configuration', () => {
     expect(result).toEqual({
       ok: true,
       value: {
-        identityStorage: 'memory',
+        storage: 'memory',
         eventTransport: 'local',
         database: undefined,
         nats: undefined,
@@ -19,7 +19,7 @@ describe('runtime configuration', () => {
 
   it('requires a database URL when PostgreSQL mode is selected', () => {
     const result = parseRuntimeConfig(
-      map({ N2F_IDENTITY_STORAGE: 'postgres' }),
+      map({ N2F_STORAGE: 'postgres' }),
     );
 
     expect(result.ok).toBe(false);
@@ -28,10 +28,23 @@ describe('runtime configuration', () => {
     }
   });
 
-  it('parses PostgreSQL settings without exposing the URL as ordinary text', () => {
+  it('accepts the previous Identity-specific storage key as a compatibility alias', () => {
     const result = parseRuntimeConfig(
       map({
         N2F_IDENTITY_STORAGE: 'postgres',
+        N2F_DATABASE_URL: 'postgres://localhost/n2f',
+        N2F_EVENT_TRANSPORT: 'local',
+      }),
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.storage).toBe('postgres');
+  });
+
+  it('parses PostgreSQL settings without exposing the URL as ordinary text', () => {
+    const result = parseRuntimeConfig(
+      map({
+        N2F_STORAGE: 'postgres',
         N2F_EVENT_TRANSPORT: 'local',
         N2F_DATABASE_URL: 'postgres://localhost/n2f',
         N2F_DATABASE_MAX_CONNECTIONS: '4',
@@ -41,7 +54,7 @@ describe('runtime configuration', () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.value.identityStorage).toBe('postgres');
+      expect(result.value.storage).toBe('postgres');
       expect(result.value.eventTransport).toBe('local');
       expect(result.value.database?.maxConnections).toBe(4);
       expect(result.value.database?.timeoutMs).toBe(3000);
@@ -53,11 +66,12 @@ describe('runtime configuration', () => {
   it('parses NATS settings for durable PostgreSQL mode', () => {
     const result = parseRuntimeConfig(
       map({
-        N2F_IDENTITY_STORAGE: 'postgres',
+        N2F_STORAGE: 'postgres',
         N2F_EVENT_TRANSPORT: 'nats',
         N2F_DATABASE_URL: 'postgres://localhost/n2f',
         N2F_NATS_URL: 'nats://localhost:4222',
         N2F_NATS_STREAM: 'n2f_events',
+        N2F_NATS_SUBJECT_PREFIX: 'n2f.events.',
         N2F_NATS_CONSUMER: 'audit_projection',
         N2F_NATS_TIMEOUT_MS: '2000',
       }),
@@ -67,6 +81,7 @@ describe('runtime configuration', () => {
     if (result.ok) {
       expect(result.value.eventTransport).toBe('nats');
       expect(result.value.nats?.stream).toBe('n2f_events');
+      expect(result.value.nats?.subjectPrefix).toBe('n2f.events.');
       expect(result.value.nats?.consumer).toBe('audit_projection');
       expect(result.value.nats?.timeoutMs).toBe(2000);
       expect(result.value.nats?.url.toString()).toBe('[REDACTED]');
@@ -76,7 +91,7 @@ describe('runtime configuration', () => {
   it('defaults PostgreSQL mode to NATS unless local transport is explicit', () => {
     const result = parseRuntimeConfig(
       map({
-        N2F_IDENTITY_STORAGE: 'postgres',
+        N2F_STORAGE: 'postgres',
         N2F_DATABASE_URL: 'postgres://localhost/n2f',
         N2F_NATS_URL: 'nats://localhost:4222',
       }),
@@ -85,6 +100,8 @@ describe('runtime configuration', () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value.eventTransport).toBe('nats');
+      expect(result.value.nats?.stream).toBe('n2f_events');
+      expect(result.value.nats?.subjectPrefix).toBe('n2f.events.');
     }
   });
 

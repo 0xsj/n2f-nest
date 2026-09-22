@@ -34,7 +34,7 @@ export class PostgresVerificationWriter implements VerificationWriter {
 
       try {
         const identity = await transaction.query(
-          `UPDATE public.signals_identity_identities
+          `UPDATE public.n2f_identity_identities
               SET status=$2,updated_at=$3,verified_at=$4
             WHERE id=$1::uuid`,
           [
@@ -49,7 +49,7 @@ export class PostgresVerificationWriter implements VerificationWriter {
         }
 
         const challenge = await transaction.query(
-          `UPDATE public.signals_identity_verification_challenges
+          `UPDATE public.n2f_identity_verification_challenges
               SET status=$2,consumed_at=$3
             WHERE id=$1::uuid AND identity_id=$4::uuid`,
           [

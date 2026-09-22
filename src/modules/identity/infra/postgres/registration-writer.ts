@@ -40,7 +40,7 @@ export class PostgresRegistrationWriter implements RegistrationWriter {
 
       try {
         await transaction.query(
-          `INSERT INTO public.signals_identity_identities
+          `INSERT INTO public.n2f_identity_identities
             (id,status,created_at,updated_at,verified_at)
            VALUES ($1::uuid,$2,$3,$4,$5)`,
           [
@@ -53,7 +53,7 @@ export class PostgresRegistrationWriter implements RegistrationWriter {
         );
 
         await transaction.query(
-          `INSERT INTO public.signals_identity_credentials
+          `INSERT INTO public.n2f_identity_credentials
             (id,identity_id,method,email,status,password_hash,created_at,updated_at,revoked_at)
            VALUES ($1::uuid,$2::uuid,$3,$4,$5,$6,$7,$8,$9)`,
           [

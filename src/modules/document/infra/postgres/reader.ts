@@ -69,7 +69,7 @@ export class PostgresDocumentReader implements DocumentReader {
                   created_at,
                   updated_at,
                   archived_at
-             FROM public.signals_document_documents
+             FROM public.n2f_document_documents
             WHERE id=$1::uuid`,
           [id],
         );
@@ -97,7 +97,7 @@ export class PostgresDocumentReader implements DocumentReader {
                   created_at,
                   updated_at,
                   archived_at
-             FROM public.signals_document_documents
+             FROM public.n2f_document_documents
             WHERE organization_id=$1::uuid
             ORDER BY created_at,id`,
           [organizationId],

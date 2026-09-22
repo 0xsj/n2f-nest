@@ -78,7 +78,10 @@ domains prove that they need identical semantics.
 Domain tests cover submission, immutable lifecycle transitions, failure and
 retry, attempt exhaustion and invalid kinds. The runtime integration exercises
 the HTTP lifecycle and Audit projection. PostgreSQL and NATS integration cover
-durable Job state and event delivery.
+durable Job state and event delivery. Adapter contract tests cover both
+in-memory and PostgreSQL-shaped persistence, including state-before-event
+ordering, provenance rejection, opaque subject rehydration and rollback on
+publication failure.
 
 ## Next decisions
 

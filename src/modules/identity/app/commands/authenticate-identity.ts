@@ -8,6 +8,7 @@ import { Envelope } from '../../../../shared/events/index.js';
 import type { WallClock } from '../../../../shared/clock/index.js';
 import type { ID, IDGenerator } from '../../../../shared/id/index.js';
 import type { WorkContext } from '../../../../shared/provenance/index.js';
+import { PASSWORD_MAX_LENGTH } from '../ports/password-policy.js';
 import { IDENTITY_EVENT_TYPES } from '../../domain/index.js';
 import type { SecretString } from '../../../../shared/secret/index.js';
 import { normalizeEmail, Session } from '../../domain/index.js';
@@ -64,6 +65,13 @@ export class AuthenticateIdentity {
   async execute(
     command: AuthenticateIdentityCommand,
   ): Promise<Result<AuthenticateIdentityResult, IdentityApplicationFailure>> {
+    // Do not spend password-verifier work on an input outside Identity's
+    // credential contract. Login still returns the same public refusal as any
+    // other invalid credential so callers cannot distinguish this guard.
+    if (command.password.reveal().length > PASSWORD_MAX_LENGTH) {
+      return err(invalidCredentials());
+    }
+
     const email = normalizeEmail(command.email);
 
     if (!email.ok) {

@@ -5,8 +5,10 @@ import type { Database } from '../../../shared/postgres/index.js';
 import { Factory as ProvenanceFactory } from '../../../shared/provenance/index.js';
 import {
   DATABASE,
+  requireDatabase,
   RUNTIME_CONFIG,
   type RuntimeConfig,
+  usesPostgres,
 } from '../../../platform/runtime/index.js';
 import {
   CancelJob,
@@ -35,11 +37,6 @@ const PORTS = {
   writer: Symbol('jobs.writer'),
 } as const;
 
-function databaseOrThrow(database: Database | undefined): Database {
-  if (!database) throw new Error('PostgreSQL Jobs storage was not initialized');
-  return database;
-}
-
 export const jobsProviders: Provider[] = [
   SystemClock,
   {
@@ -67,8 +64,8 @@ export const jobsProviders: Provider[] = [
       database: Database | undefined,
       inMemory: InMemoryJobReader,
     ): JobReader =>
-      config.identityStorage === 'postgres'
-        ? new PostgresJobReader(databaseOrThrow(database))
+      usesPostgres(config)
+        ? new PostgresJobReader(requireDatabase(database, 'Jobs'))
         : inMemory,
     inject: [RUNTIME_CONFIG, DATABASE, InMemoryJobReader],
   },
@@ -79,8 +76,8 @@ export const jobsProviders: Provider[] = [
       database: Database | undefined,
       inMemory: InMemoryJobWriter,
     ): JobWriter =>
-      config.identityStorage === 'postgres'
-        ? new PostgresJobWriter(databaseOrThrow(database))
+      usesPostgres(config)
+        ? new PostgresJobWriter(requireDatabase(database, 'Jobs'))
         : inMemory,
     inject: [RUNTIME_CONFIG, DATABASE, InMemoryJobWriter],
   },

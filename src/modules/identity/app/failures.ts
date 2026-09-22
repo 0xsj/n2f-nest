@@ -22,6 +22,7 @@ type KnownIdentityFailure =
   | TypedFailure<
       'invalid',
       | 'identity.password_too_short'
+      | 'identity.password_too_long'
       | 'identity.invalid_session_expiry'
       | 'identity.invalid_verification_expiry'
     >
@@ -92,6 +93,11 @@ function knownFailure(error: Failure): KnownIdentityFailure | undefined {
         cause: error,
       });
     case 'identity.password_too_short':
+      return typedFailure('invalid', error.type, error.message, {
+        fields: error.fields,
+        cause: error,
+      });
+    case 'identity.password_too_long':
       return typedFailure('invalid', error.type, error.message, {
         fields: error.fields,
         cause: error,

@@ -15,7 +15,7 @@ integration('Chaos resilience integration', () => {
   let faults: FaultInjector | undefined;
 
   beforeAll(async () => {
-    process.env.N2F_IDENTITY_STORAGE = 'memory';
+    process.env.N2F_STORAGE = 'memory';
     process.env.N2F_EVENT_TRANSPORT = 'local';
     const created = await createChaosApplication();
     app = created.app;

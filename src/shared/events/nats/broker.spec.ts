@@ -8,6 +8,8 @@ it('rejects invalid JetStream configuration before connecting', async () => {
     { url: 'nats://', stream: 'signals', consumer: 'audit', timeoutMs: 1000 },
     { url: 'nats://localhost:4222', stream: 'bad stream', consumer: 'audit', timeoutMs: 1000 },
     { url: 'nats://localhost:4222', stream: 'signals', consumer: 'audit', timeoutMs: 0 },
+    { url: 'nats://localhost:4222', stream: 'n2f_events', consumer: 'audit', timeoutMs: 1000, subjectPrefix: 'n2f.events' },
+    { url: 'nats://localhost:4222', stream: 'n2f_events', consumer: 'audit', timeoutMs: 1000, subjectPrefix: 'n2f.*.' },
   ]) {
     const result = await Broker.open({
       ...config,

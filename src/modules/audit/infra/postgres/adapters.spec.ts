@@ -124,7 +124,7 @@ describe('PostgreSQL Audit adapters', () => {
 
     expect(result).toEqual(ok({ entry: entry(), created: true }));
     expect(database.client.queries).toHaveLength(1);
-    expect(database.client.queries[0]).toContain('signals_audit_entries');
+    expect(database.client.queries[0]).toContain('n2f_audit_entries');
   });
 
   it('returns the existing entry when the source event is delivered again', async () => {
@@ -153,5 +153,24 @@ describe('PostgreSQL Audit adapters', () => {
       });
       expect(result.value[0]?.provenance.operation).toBe('identity.register');
     }
+  });
+
+  it('maps database failures to safe Result values', async () => {
+    const database: TransactionDatabase = {
+      transaction: async (fn) =>
+        fn(
+          {
+            query: async () => {
+              throw new Error('connection details must not escape');
+            },
+          } as unknown as pg.PoolClient,
+          new AbortController().signal,
+        ),
+    };
+
+    const result = await new PostgresAuditEntryReader(database).list();
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.kind).toBe('unavailable');
   });
 });

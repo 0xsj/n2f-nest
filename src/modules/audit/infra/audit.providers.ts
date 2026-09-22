@@ -4,8 +4,10 @@ import { V7 } from '../../../shared/id/index.js';
 import type { Database } from '../../../shared/postgres/index.js';
 import {
   DATABASE,
+  requireDatabase,
   RUNTIME_CONFIG,
   type RuntimeConfig,
+  usesPostgres,
 } from '../../../platform/runtime/index.js';
 import {
   ListAuditEntries,
@@ -45,8 +47,8 @@ export const auditProviders: Provider[] = [
       database: Database | undefined,
       store: InMemoryAuditStore,
     ) =>
-      config.identityStorage === 'postgres'
-        ? new PostgresAuditEntryWriter(databaseOrThrow(database))
+      usesPostgres(config)
+        ? new PostgresAuditEntryWriter(requireDatabase(database, 'Audit'))
         : new InMemoryAuditEntryWriter(store),
     inject: [RUNTIME_CONFIG, DATABASE, InMemoryAuditStore],
   },
@@ -57,8 +59,8 @@ export const auditProviders: Provider[] = [
       database: Database | undefined,
       store: InMemoryAuditStore,
     ) =>
-      config.identityStorage === 'postgres'
-        ? new PostgresAuditEntryReader(databaseOrThrow(database))
+      usesPostgres(config)
+        ? new PostgresAuditEntryReader(requireDatabase(database, 'Audit'))
         : new InMemoryAuditEntryReader(store),
     inject: [RUNTIME_CONFIG, DATABASE, InMemoryAuditStore],
   },
@@ -74,10 +76,3 @@ export const auditProviders: Provider[] = [
     inject: [PORTS.reader],
   },
 ];
-
-function databaseOrThrow(database: Database | undefined): Database {
-  if (!database) {
-    throw new Error('PostgreSQL Audit storage was not initialized');
-  }
-  return database;
-}

@@ -12,6 +12,7 @@ import { PlatformHttpModule } from './platform/http/http.module.js';
 import { RequestLoggerMiddleware } from './platform/http/request-logger.middleware.js';
 import { PlatformEventsModule } from './platform/events/events.module.js';
 import { PlatformRuntimeModule } from './platform/runtime/runtime.module.js';
+import { PlatformRateLimitModule } from './platform/ratelimit/index.js';
 import { appMigrations } from './app/migrations.js';
 import { DocumentProcessingModule } from './workflows/document-processing/index.js';
 
@@ -20,6 +21,7 @@ import { DocumentProcessingModule } from './workflows/document-processing/index.
     PlatformHttpModule,
     PlatformEventsModule,
     PlatformRuntimeModule.forRoot(appMigrations),
+    PlatformRateLimitModule,
     IdentityModule,
     OrganizationModule,
     DocumentModule,

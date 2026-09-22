@@ -67,6 +67,16 @@ must return an outcome meaningful to its callers. The original failure remains
 available privately for diagnostics without becoming part of the domain's
 public contract.
 
+## Credential policy failures
+
+Password length is an Identity-owned policy. Registration returns the typed
+invalid failures `identity.password_too_short` and
+`identity.password_too_long`, so a caller can correct its input. Authentication
+uses the same upper bound as a work guard, but maps an oversized login input to
+`identity.invalid_credentials`. This keeps the public login refusal uniform
+while avoiding unnecessary password-verifier work on an input that cannot be a
+valid Identity credential.
+
 ## Limits
 
 - The adapter-facing ports remain open to shared `Failure` because external

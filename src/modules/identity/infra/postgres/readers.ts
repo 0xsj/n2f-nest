@@ -147,7 +147,7 @@ export class PostgresIdentityReader implements IdentityReader {
       try {
         const result = await transaction.query<IdentityRow>(
           `SELECT id,status,created_at,updated_at,verified_at
-             FROM public.signals_identity_identities
+             FROM public.n2f_identity_identities
             WHERE id=$1::uuid`,
           [identityId],
         );
@@ -171,7 +171,7 @@ export class PostgresIdentityViewReader implements IdentityViewReader {
       try {
         const result = await transaction.query<IdentityRow>(
           `SELECT id,status,created_at,updated_at,verified_at
-             FROM public.signals_identity_identities
+             FROM public.n2f_identity_identities
             WHERE id=$1::uuid`,
           [identityId],
         );
@@ -214,8 +214,8 @@ export class PostgresCredentialAuthenticatorReader
              c.created_at AS credential_created_at,
              c.updated_at AS credential_updated_at,
              c.revoked_at AS credential_revoked_at
-           FROM public.signals_identity_credentials c
-           JOIN public.signals_identity_identities i ON i.id=c.identity_id
+           FROM public.n2f_identity_credentials c
+           JOIN public.n2f_identity_identities i ON i.id=c.identity_id
           WHERE c.email=$1 AND c.status='active'`,
           [email],
         );
@@ -264,7 +264,7 @@ export class PostgresVerificationChallengeReader
         const result = await transaction.query<ChallengeRow>(
           `SELECT id,identity_id,purpose,status,issued_at,expires_at,
                   consumed_at,token_digest
-             FROM public.signals_identity_verification_challenges
+             FROM public.n2f_identity_verification_challenges
             WHERE id=$1::uuid`,
           [challengeId],
         );

@@ -183,6 +183,12 @@ boundary. The command authenticates the current actor, requires that the actor
 matches the invited Identity, checks for an existing membership, and lets the
 Invitation aggregate enforce expiry and pending-state rules.
 
+The adapter contract suite exercises the same boundaries without importing
+Nest composition: organization creation writes both aggregates before its two
+outbox facts, provenance mismatches perform no database work, rows rehydrate
+through all three domain restore factories, and in-memory invitation
+acceptance rolls back as one multi-aggregate unit when event publication fails.
+
 `RevokeInvitation` lets an owner cancel a still-pending invitation through the
 same `InvitationWriter` state-plus-event boundary. Accepted invitations are
 not revocable by this command, and expiry is currently evaluated when an

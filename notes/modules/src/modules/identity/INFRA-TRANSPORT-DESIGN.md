@@ -74,8 +74,9 @@ migrations do not need to be edited after they could have been applied.
 
 ## Runtime composition
 
-`PlatformRuntimeModule` selects all current Identity and Audit adapters as one
-runtime set using `N2F_IDENTITY_STORAGE`. Memory mode is the default.
+`PlatformRuntimeModule` selects all current module adapters as one runtime set
+using `N2F_STORAGE`. Memory mode is the default. The resulting `storage`
+property is domain-neutral; Identity does not own runtime persistence mode.
 PostgreSQL mode opens the shared `Database`, applies the ordered application
 migration list through Organization `0007` and starts a post-bootstrap outbox worker.
 The worker currently uses a durable in-process publisher while Audit persists

@@ -12,7 +12,7 @@ integration('Organization runtime integration', () => {
   let app: INestApplication | undefined;
 
   beforeAll(async () => {
-    process.env.N2F_IDENTITY_STORAGE = 'memory';
+    process.env.N2F_STORAGE = 'memory';
     process.env.N2F_EVENT_TRANSPORT = 'local';
     app = await NestFactory.create(AppModule, { logger: false });
     await app.init();
@@ -55,7 +55,7 @@ integration('Organization runtime integration', () => {
     const created = await request(server)
       .post('/organizations')
       .set('Authorization', `Bearer ${loggedIn.body.token}`)
-      .send({ name: 'Signals Artist Agency', slug: 'signals-agency' });
+      .send({ name: 'Example Organization', slug: 'n2f-agency' });
 
     expect(created.status).toBe(201);
     expect(created.body).toEqual({
@@ -316,8 +316,8 @@ integration('Organization runtime integration', () => {
     expect(invitedOrganizations.body).toEqual([
       {
         organizationId: created.body.organizationId,
-        name: 'Signals Artist Agency',
-        slug: 'signals-agency',
+        name: 'Example Organization',
+        slug: 'n2f-agency',
         status: 'active',
         membershipId: accepted.body.membershipId,
         role: 'member',
@@ -395,8 +395,8 @@ integration('Organization runtime integration', () => {
     expect(listed.body).toEqual([
       {
         organizationId: created.body.organizationId,
-        name: 'Signals Artist Agency',
-        slug: 'signals-agency',
+        name: 'Example Organization',
+        slug: 'n2f-agency',
         status: 'active',
         membershipId: created.body.ownerMembershipId,
         role: 'owner',
@@ -420,8 +420,8 @@ integration('Organization runtime integration', () => {
     expect(targetOrganizations.body).toEqual([
       {
         organizationId: created.body.organizationId,
-        name: 'Signals Artist Agency',
-        slug: 'signals-agency',
+        name: 'Example Organization',
+        slug: 'n2f-agency',
         status: 'active',
         membershipId: added.body.membershipId,
         role: 'admin',

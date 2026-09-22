@@ -97,7 +97,9 @@ the concept is genuinely shared.
 Domain tests cover normalization, optional storage metadata, invalid input,
 immutable archival and duplicate archival rejection. The organization runtime
 integration covers create, list, get, archive and Audit projection through the
-Nest HTTP composition.
+Nest HTTP composition. Adapter contract tests cover both in-memory and
+PostgreSQL-shaped persistence, including state-before-event ordering,
+provenance rejection, rehydration and rollback on publication failure.
 
 ## Cross-domain decision
 

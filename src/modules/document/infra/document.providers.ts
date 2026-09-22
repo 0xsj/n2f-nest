@@ -5,8 +5,10 @@ import type { Database } from '../../../shared/postgres/index.js';
 import { Factory as ProvenanceFactory } from '../../../shared/provenance/index.js';
 import {
   DATABASE,
+  requireDatabase,
   RUNTIME_CONFIG,
   type RuntimeConfig,
+  usesPostgres,
 } from '../../../platform/runtime/index.js';
 import {
   ArchiveDocument,
@@ -37,13 +39,6 @@ const PORTS = {
   writer: Symbol('document.writer'),
 } as const;
 
-function databaseOrThrow(database: Database | undefined): Database {
-  if (!database) {
-    throw new Error('PostgreSQL Document storage was not initialized');
-  }
-  return database;
-}
-
 export const documentProviders: Provider[] = [
   SystemClock,
   {
@@ -71,8 +66,8 @@ export const documentProviders: Provider[] = [
       database: Database | undefined,
       inMemory: InMemoryDocumentReader,
     ): DocumentReader =>
-      config.identityStorage === 'postgres'
-        ? new PostgresDocumentReader(databaseOrThrow(database))
+      usesPostgres(config)
+        ? new PostgresDocumentReader(requireDatabase(database, 'Document'))
         : inMemory,
     inject: [RUNTIME_CONFIG, DATABASE, InMemoryDocumentReader],
   },
@@ -83,8 +78,8 @@ export const documentProviders: Provider[] = [
       database: Database | undefined,
       inMemory: InMemoryDocumentWriter,
     ): DocumentWriter =>
-      config.identityStorage === 'postgres'
-        ? new PostgresDocumentWriter(databaseOrThrow(database))
+      usesPostgres(config)
+        ? new PostgresDocumentWriter(requireDatabase(database, 'Document'))
         : inMemory,
     inject: [RUNTIME_CONFIG, DATABASE, InMemoryDocumentWriter],
   },

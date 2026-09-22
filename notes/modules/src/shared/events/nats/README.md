@@ -7,6 +7,9 @@ The NATS JetStream adapter is the remote transport option behind the same
 
 - Stream and durable-consumer provisioning is explicit and verifies the
   important configuration rather than silently accepting drift.
+- Subject construction is configured at the adapter boundary. The reusable
+  default is `n2f.events.`; legacy deployments can explicitly use
+  `signals.events.` during rollback.
 - Publish uses the event ID as the NATS message ID. A duplicate acknowledgement
   is verified against the stored event bytes before it is treated as durable.
 - `transfer` moves one received event to another `Publisher` and acknowledges
@@ -25,10 +28,9 @@ once, waits past the configured acknowledgement window, and verifies that the
 same event is delivered again. This protects the important boundary: a local
 subscriber failure must not become a successful JetStream ACK.
 
-The redelivery test reuses the application `signals` stream and creates a
-unique consumer with `deliver_policy: new`. This keeps repeated test runs from
-creating unbounded temporary streams while preventing historical application
-events from being mistaken for the test event.
+The redelivery test reads the stream and subject prefix from environment
+configuration. Local runs use `n2f_events` and `n2f.events.` by default, while
+legacy deployments can explicitly test the compatibility namespace.
 
 ## Gotchas
 

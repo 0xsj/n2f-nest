@@ -4,7 +4,9 @@ export {
   loadRuntimeConfig,
   parseRuntimeConfig,
   type RuntimeConfig,
+  type StorageMode,
 } from './config.js';
+export { requireDatabase, usesPostgres } from './storage.js';
 export {
   DATABASE,
   DURABLE_EVENT_PUBLISHER,

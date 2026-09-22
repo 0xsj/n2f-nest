@@ -21,6 +21,8 @@ would otherwise have to rediscover.
 - [Validation](modules/src/shared/validation/README.md), [secret](modules/src/shared/secret/README.md),
   [keyed](modules/src/shared/keyed/README.md) and [pagination](modules/src/shared/pagination/README.md):
   reusable input, disclosure, digest and query-boundary capabilities.
+- [Rate limiting](modules/src/shared/ratelimit/README.md) and [platform rate limiting](modules/src/platform/ratelimit/README.md):
+  reusable quota mechanics separated from transport and endpoint policy.
 - [Telemetry](modules/src/shared/telemetry/README.md), [health](modules/src/shared/health/README.md)
   and [events](modules/src/shared/events/README.md): SDK-free observation,
   readiness and the first event envelope seam.
@@ -48,6 +50,8 @@ would otherwise have to rediscover.
   why ordinary failures are returned while framework edges may throw.
 - [Error values and exception boundaries](architecture/error-values-and-exception-boundaries.md):
   the enforceable rule for Result-oriented domain and application code.
+- [ADR-001: persistence and event namespace](architecture/ADR-001-persistence-and-event-namespace.md):
+  the staged, reversible plan for removing the legacy Signals namespace.
 - [Specification tests](techniques/specification-tests-and-targeted-mutations.md):
   how the tests express behavior and expose tempting implementation mistakes.
 

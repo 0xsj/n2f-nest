@@ -22,7 +22,7 @@ describe('HTTP feature leaves', () => {
 
   it('serializes cookies with prefix and control-character protections', () => {
     const base = {
-      name: '__Host-signals_session',
+      name: '__Host-n2f_session',
       value: 'abc',
       path: '/',
       secure: true,
@@ -33,7 +33,7 @@ describe('HTTP feature leaves', () => {
     expect(serializeCookie(base)).toEqual({
       ok: true,
       value:
-        '__Host-signals_session=abc; Path=/; Max-Age=60; Secure; HttpOnly; SameSite=Lax',
+        '__Host-n2f_session=abc; Path=/; Max-Age=60; Secure; HttpOnly; SameSite=Lax',
     });
     for (const bad of [
       { ...base, secure: false },

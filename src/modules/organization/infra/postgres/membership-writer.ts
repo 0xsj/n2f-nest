@@ -19,7 +19,7 @@ export class PostgresMembershipWriter implements MembershipWriter {
 
       try {
         const inserted = await transaction.query(
-          `INSERT INTO public.signals_organization_memberships
+          `INSERT INTO public.n2f_organization_memberships
             (id,organization_id,identity_id,role,status,created_at,updated_at,revoked_at)
            VALUES ($1::uuid,$2::uuid,$3::uuid,$4,$5,$6,$7,$8)
            ON CONFLICT (id) DO NOTHING`,
@@ -36,7 +36,7 @@ export class PostgresMembershipWriter implements MembershipWriter {
         );
         if (inserted.rowCount !== 1) {
           const updated = await transaction.query(
-            `UPDATE public.signals_organization_memberships
+            `UPDATE public.n2f_organization_memberships
                 SET role=$2,status=$3,updated_at=$4,revoked_at=$5
               WHERE id=$1::uuid`,
             [

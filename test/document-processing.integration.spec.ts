@@ -12,7 +12,7 @@ integration('Document processing workflow integration', () => {
   let app: INestApplication | undefined;
 
   beforeAll(async () => {
-    process.env.N2F_IDENTITY_STORAGE = 'memory';
+    process.env.N2F_STORAGE = 'memory';
     process.env.N2F_EVENT_TRANSPORT = 'local';
     app = await NestFactory.create(AppModule, { logger: false });
     await app.init();

@@ -20,7 +20,7 @@ export class PostgresDocumentWriter implements DocumentWriter {
       try {
         if (input.mode === 'create') {
           await transaction.query(
-            `INSERT INTO public.signals_document_documents
+            `INSERT INTO public.n2f_document_documents
               (id,organization_id,name,storage_key,status,processing_failure_code,created_at,updated_at,archived_at)
              VALUES ($1::uuid,$2::uuid,$3,$4,$5,$6,$7,$8,$9)`,
             [
@@ -37,7 +37,7 @@ export class PostgresDocumentWriter implements DocumentWriter {
           );
         } else {
           const updated = await transaction.query(
-            `UPDATE public.signals_document_documents
+            `UPDATE public.n2f_document_documents
                 SET name=$2,
                     storage_key=$3,
                     status=$4,

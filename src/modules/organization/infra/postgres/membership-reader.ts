@@ -61,7 +61,7 @@ export class PostgresMembershipReader implements MembershipReader {
   ): Promise<Result<Membership | null, Failure>> {
     return this.read(
       `SELECT id,organization_id,identity_id,role,status,created_at,updated_at,revoked_at
-         FROM public.signals_organization_memberships
+         FROM public.n2f_organization_memberships
         WHERE id=$1::uuid`,
       [membershipId],
       signal,
@@ -75,7 +75,7 @@ export class PostgresMembershipReader implements MembershipReader {
   ): Promise<Result<Membership | null, Failure>> {
     return this.read(
       `SELECT id,organization_id,identity_id,role,status,created_at,updated_at,revoked_at
-         FROM public.signals_organization_memberships
+         FROM public.n2f_organization_memberships
         WHERE organization_id=$1::uuid AND identity_id=$2::uuid AND status='active'`,
       [organizationId, identityId],
       signal,
@@ -89,7 +89,7 @@ export class PostgresMembershipReader implements MembershipReader {
   ): Promise<Result<Membership | null, Failure>> {
     return this.read(
       `SELECT id,organization_id,identity_id,role,status,created_at,updated_at,revoked_at
-         FROM public.signals_organization_memberships
+         FROM public.n2f_organization_memberships
         WHERE organization_id=$1::uuid AND identity_id=$2::uuid`,
       [organizationId, identityId],
       signal,

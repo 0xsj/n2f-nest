@@ -19,7 +19,7 @@ export class PostgresJobWriter implements JobWriter {
       try {
         if (input.mode === 'create') {
           await transaction.query(
-            `INSERT INTO public.signals_jobs_jobs
+            `INSERT INTO public.n2f_jobs_jobs
               (id,organization_id,kind,subject_type,subject_id,status,attempts,max_attempts,created_at,updated_at,started_at,finished_at,failure_code)
              VALUES ($1::uuid,$2::uuid,$3,$4,$5::uuid,$6,$7,$8,$9,$10,$11,$12,$13)`,
             [
@@ -40,7 +40,7 @@ export class PostgresJobWriter implements JobWriter {
           );
         } else {
           const updated = await transaction.query(
-            `UPDATE public.signals_jobs_jobs
+            `UPDATE public.n2f_jobs_jobs
                 SET kind=$2,
                     subject_type=$3,
                     subject_id=$4::uuid,

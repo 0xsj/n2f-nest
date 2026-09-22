@@ -112,8 +112,8 @@ integration('PostgreSQL runtime integration', () => {
       .post('/organizations')
       .set('Authorization', `Bearer ${sessionToken}`)
       .send({
-        name: 'Signals Artist Agency',
-        slug: `signals-${randomUUID().slice(0, 8)}`,
+        name: 'Example Organization',
+        slug: `n2f-${randomUUID().slice(0, 8)}`,
       });
 
     expect(organization.status).toBe(201);
@@ -139,8 +139,8 @@ integration('PostgreSQL runtime integration', () => {
     expect(organizations.body).toEqual([
       {
         organizationId: organization.body.organizationId,
-        name: 'Signals Artist Agency',
-        slug: expect.stringMatching(/^signals-[a-f0-9]{8}$/),
+        name: 'Example Organization',
+        slug: expect.stringMatching(/^n2f-[a-f0-9]{8}$/),
         status: 'active',
         membershipId: organization.body.ownerMembershipId,
         role: 'owner',
@@ -362,14 +362,14 @@ integration('PostgreSQL runtime integration', () => {
         state: string;
         event_type: string;
       }>(
-        "SELECT state,(envelope::jsonb)->>'type' AS event_type FROM public.signals_outbox WHERE (envelope::jsonb #>> '{payload,identity_id}')=$1 ORDER BY event_type",
+        "SELECT state,(envelope::jsonb)->>'type' AS event_type FROM public.n2f_outbox WHERE (envelope::jsonb #>> '{payload,identity_id}')=$1 ORDER BY event_type",
         [identityId],
       );
       const entries = await transaction.query<{
         event_type: string;
         subject_id: string;
       }>(
-        'SELECT event_type,subject_id::text FROM public.signals_audit_entries WHERE subject_id=$1::uuid ORDER BY event_type',
+        'SELECT event_type,subject_id::text FROM public.n2f_audit_entries WHERE subject_id=$1::uuid ORDER BY event_type',
         [identityId],
       );
       const organizations = await transaction.query<{
@@ -378,7 +378,7 @@ integration('PostgreSQL runtime integration', () => {
         slug: string;
         status: string;
       }>(
-        'SELECT id::text,name,slug,status FROM public.signals_organization_organizations WHERE id=$1::uuid',
+        'SELECT id::text,name,slug,status FROM public.n2f_organization_organizations WHERE id=$1::uuid',
         [organization.body.organizationId],
       );
       const memberships = await transaction.query<{
@@ -388,7 +388,7 @@ integration('PostgreSQL runtime integration', () => {
         role: string;
         status: string;
       }>(
-        'SELECT id::text,organization_id::text,identity_id::text,role,status FROM public.signals_organization_memberships WHERE id=$1::uuid',
+        'SELECT id::text,organization_id::text,identity_id::text,role,status FROM public.n2f_organization_memberships WHERE id=$1::uuid',
         [organization.body.ownerMembershipId],
       );
       const documents = await transaction.query<{
@@ -398,7 +398,7 @@ integration('PostgreSQL runtime integration', () => {
         storage_key: string | null;
         status: string;
       }>(
-        'SELECT id::text,organization_id::text,name,storage_key,status FROM public.signals_document_documents WHERE id=$1::uuid',
+        'SELECT id::text,organization_id::text,name,storage_key,status FROM public.n2f_document_documents WHERE id=$1::uuid',
         [document.body.documentId],
       );
       const jobs = await transaction.query<{
@@ -411,7 +411,7 @@ integration('PostgreSQL runtime integration', () => {
         subject_type: string | null;
         subject_id: string | null;
       }>(
-        'SELECT id::text,organization_id::text,kind,status,attempts,max_attempts,subject_type,subject_id::text FROM public.signals_jobs_jobs WHERE id=$1::uuid',
+        'SELECT id::text,organization_id::text,kind,status,attempts,max_attempts,subject_type,subject_id::text FROM public.n2f_jobs_jobs WHERE id=$1::uuid',
         [job.body.jobId],
       );
       const workflowJobs = await transaction.query<{
@@ -424,7 +424,7 @@ integration('PostgreSQL runtime integration', () => {
         subject_type: string | null;
         subject_id: string | null;
       }>(
-        'SELECT id::text,organization_id::text,kind,status,attempts,max_attempts,subject_type,subject_id::text FROM public.signals_jobs_jobs WHERE id=$1::uuid',
+        'SELECT id::text,organization_id::text,kind,status,attempts,max_attempts,subject_type,subject_id::text FROM public.n2f_jobs_jobs WHERE id=$1::uuid',
         [processing.body.jobId],
       );
       return ok({
@@ -455,8 +455,8 @@ integration('PostgreSQL runtime integration', () => {
       expect(persisted.value.organizations).toEqual([
         {
           id: organization.body.organizationId,
-          name: 'Signals Artist Agency',
-          slug: expect.stringMatching(/^signals-[a-f0-9]{8}$/),
+          name: 'Example Organization',
+          slug: expect.stringMatching(/^n2f-[a-f0-9]{8}$/),
           status: 'active',
         },
       ]);

@@ -6,12 +6,16 @@ ports; they do not read environment variables or open database connections.
 
 ## Runtime modes
 
-`N2F_IDENTITY_STORAGE=memory` is the default. It keeps the local curl flow
+`N2F_STORAGE=memory` is the default. It keeps the local curl flow
 self-contained and uses the in-memory Identity and Audit adapters.
 
-`N2F_IDENTITY_STORAGE=postgres` requires `N2F_DATABASE_URL`, opens the shared
+`N2F_STORAGE=postgres` requires `N2F_DATABASE_URL`, opens the shared
 PostgreSQL capability, applies migrations in this order, and selects the
-PostgreSQL implementation for every current Identity application port:
+PostgreSQL implementation for each module's application ports:
+
+`N2F_IDENTITY_STORAGE` remains accepted as a compatibility alias for existing
+local environments. New modules use the domain-neutral `storage` runtime
+property and must not make provider selection depend on Identity.
 
 In PostgreSQL mode, `N2F_EVENT_TRANSPORT` defaults to `nats`. Set it to
 `local` for a self-contained process-local publisher.
@@ -22,6 +26,13 @@ In PostgreSQL mode, `N2F_EVENT_TRANSPORT` defaults to `nats`. Set it to
 4. verification challenges (`0004`)
 5. sessions (`0005`)
 6. Audit entries (`0006`)
+7. Organization (`0007`)
+8. Organization invitations (`0008`)
+9. Document metadata (`0009`)
+10. Jobs (`0010`)
+11. Job subjects (`0011`)
+12. Document processing (`0012`)
+13. Persistence namespace rename (`0013`)
 
 The migration files are configured as Nest assets because `import.meta.url`
 resolves against `dist` in a built application. A database pool is closed by
@@ -43,6 +54,12 @@ The transport is selected by `N2F_EVENT_TRANSPORT=local|nats`. NATS requires
 PostgreSQL mode because the durable outbox is its source of truth. Provisioning
 is performed by the runtime composition provider before the workers start, and
 the NATS connection closes with the Nest application.
+
+`N2F_NATS_STREAM` defaults to the local `n2f_events` stream and
+`N2F_NATS_SUBJECT_PREFIX` defaults to `n2f.events.`. A legacy deployment can
+temporarily use `N2F_NATS_STREAM=signals` and
+`N2F_NATS_SUBJECT_PREFIX=signals.events.` during rollback or compatibility
+work.
 
 ## Real database verification
 

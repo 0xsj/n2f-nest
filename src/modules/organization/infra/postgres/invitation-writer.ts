@@ -13,7 +13,7 @@ export class PostgresInvitationWriter implements InvitationWriter {
       if (!provenance.ok) return provenance;
       try {
         const inserted = await transaction.query(
-          `INSERT INTO public.signals_organization_invitations
+          `INSERT INTO public.n2f_organization_invitations
             (id,organization_id,identity_id,role,status,created_at,updated_at,expires_at,accepted_at,revoked_at)
            VALUES ($1::uuid,$2::uuid,$3::uuid,$4,$5,$6,$7,$8,$9,$10)
            ON CONFLICT (id) DO NOTHING`,
@@ -32,7 +32,7 @@ export class PostgresInvitationWriter implements InvitationWriter {
         );
         if (inserted.rowCount !== 1) {
           const updated = await transaction.query(
-            `UPDATE public.signals_organization_invitations
+            `UPDATE public.n2f_organization_invitations
                 SET role=$2,status=$3,updated_at=$4,expires_at=$5,accepted_at=$6,revoked_at=$7
               WHERE id=$1::uuid`,
             [

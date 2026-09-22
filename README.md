@@ -49,6 +49,18 @@ The outbox publishes to JetStream, and the NATS worker forwards deliveries to
 the local Audit subscriber before acknowledging them. The command also checks
 that a failed destination is redelivered before ACK.
 
+For a network-level smoke against the running persistent backend, start it
+from the integration workspace and run the TCP E2E target:
+
+```bash
+make backend-persistent
+make backend-test-persistent-e2e
+```
+
+This exercises the real HTTP boundary for registration, verification, login,
+session revocation and asynchronous Audit delivery. The in-process durable
+integration remains the broader cross-domain persistence test.
+
 The [`requests/identity.http`](requests/identity.http) file contains the
 Kulala-friendly register, verify, login, current-identity and logout flow.
 The [`requests/organization.http`](requests/organization.http) file contains
@@ -57,21 +69,25 @@ the authenticated organization create and list requests. The
 organization-scoped Document create, list, get, process and archive flow. Run
 the backend first, then execute each request from top to bottom in Neovim.
 
-The default runtime uses process-local Identity and Audit state. To select the
-durable Identity adapters locally, provide PostgreSQL settings before startup:
+The default runtime uses process-local Identity and Audit state. To run the
+durable local stack, provide the PostgreSQL and NATS settings before startup:
 
 ```bash
-N2F_IDENTITY_STORAGE=postgres \
-N2F_DATABASE_URL=postgres://localhost/n2f \
-N2F_NATS_URL=nats://127.0.0.1:4222 \
+N2F_STORAGE=postgres \
+N2F_EVENT_TRANSPORT=nats \
+N2F_DATABASE_URL=postgres://n2f:n2f_local@127.0.0.1:7220/n2f \
+N2F_NATS_URL=nats://127.0.0.1:7222 \
+N2F_NATS_STREAM=n2f_events \
+N2F_NATS_SUBJECT_PREFIX=n2f.events. \
 bun run start:dev
 ```
 
-PostgreSQL mode runs the shared event, Identity, challenge, session, Audit and
-Organization migrations and starts the outbox worker. PostgreSQL mode defaults to NATS;
-set `N2F_EVENT_TRANSPORT=local` when a self-contained local publisher is
-preferred. NATS replaces the publisher with JetStream and starts a consumer
-that delivers to the PostgreSQL-backed Audit projection.
+PostgreSQL mode runs the shared event, Identity, challenge, session, Audit,
+Organization, Document, Jobs and namespace migrations, then starts the outbox
+worker. NATS replaces the local publisher with JetStream and starts a consumer
+that delivers to the PostgreSQL-backed Audit projection. Set
+`N2F_EVENT_TRANSPORT=local` when a self-contained process-local publisher is
+preferred.
 
 The Organization module currently supports authenticated listing, creation,
 adding an existing active Identity, owner-authorized role changes and
