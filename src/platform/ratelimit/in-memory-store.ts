@@ -28,7 +28,9 @@ function invalidConfiguration(message: string): Failure {
 export class InMemoryRateLimitStore implements RateLimitStore {
   readonly #windows = new Map<string, WindowState>();
 
-  consume(input: RateLimitConsumeInput): Result<RateLimitDecision, Failure> {
+  async consume(
+    input: RateLimitConsumeInput,
+  ): Promise<Result<RateLimitDecision, Failure>> {
     if (
       typeof input.key !== 'string' ||
       input.key.length === 0 ||

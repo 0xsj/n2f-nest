@@ -34,14 +34,19 @@ Live infrastructure coverage now includes a PostgreSQL transaction
 acknowledgement-loss scenario in `test/postgres.integration.spec.ts` and a
 JetStream publisher acknowledgement-loss/deduplication scenario in
 `src/shared/events/nats/broker.integration.spec.ts`. The existing JetStream
-redelivery test also covers a destination that fails before ACK.
+redelivery test also covers a destination that fails before ACK. The NATS
+adapter now retains a reconnecting client after a successful initial connect;
+an environment-level restart should therefore produce a temporary readiness
+failure followed by recovery without replacing the backend process. The root
+`make backend-test-nats-restart` target automates that interruption and then
+walks the durable HTTP/Audit workflow.
 
 ## Limits
 
-The current adapter covers the local EventBus only. PostgreSQL connection
-The wrappers cover the transaction and publisher seams, but live PostgreSQL
-connection loss, NATS disconnect/reconnect, lease expiry and process restart
-still need environment-level scenarios. They should be added as separate
+The current adapter covers the local EventBus only. The wrappers cover the
+transaction and publisher seams, but live PostgreSQL connection loss and lease
+expiry still need environment-level scenarios.
+They should be added as separate
 fault points rather than making one universal chaos object know every module's
 internals. A transaction `after` fault deliberately models an uncertain
 outcome; it cannot prove whether a real database commit happened without a

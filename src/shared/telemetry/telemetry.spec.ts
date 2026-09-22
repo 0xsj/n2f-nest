@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { kindOf, publicInfo } from '../errors/index.js';
-import { parseOutcome, snapshot, traceRef } from './index.js';
+import {
+  formatTraceparent,
+  parseOutcome,
+  parseTraceparent,
+  snapshot,
+  traceRef,
+} from './index.js';
 
 describe('telemetry leaves', () => {
   it('reject malformed and zero trace identities', () => {
@@ -33,6 +39,34 @@ describe('telemetry leaves', () => {
         spanId: '0123456789abcdef',
         sampled: false,
       });
+    }
+  });
+
+  it('parses and formats a bounded W3C traceparent', () => {
+    const parsed = parseTraceparent(
+      '00-0123456789abcdef0123456789abcdef-0123456789abcdef-01',
+    );
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) {
+      expect(formatTraceparent(parsed.value)).toBe(
+        '00-0123456789abcdef0123456789abcdef-0123456789abcdef-01',
+      );
+    }
+
+    for (const value of [
+      '',
+      '01-0123456789abcdef0123456789abcdef-0123456789abcdef-01',
+      '00-00000000000000000000000000000000-0123456789abcdef-01',
+      '00-0123456789abcdef0123456789abcdef-0000000000000000-01',
+      '00-0123456789abcdef0123456789abcdef-0123456789abcdef-2',
+    ]) {
+      const invalid = parseTraceparent(value);
+      expect(invalid.ok).toBe(false);
+      if (!invalid.ok) {
+        expect(publicInfo(invalid.error).type).toBe(
+          'telemetry.invalid_traceparent',
+        );
+      }
     }
   });
 

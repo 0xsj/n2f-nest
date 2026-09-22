@@ -97,7 +97,9 @@ export class Broker implements Publisher {
       const connection = await connect({
         servers: config.url.reveal(),
         timeout: config.timeoutMs,
-        reconnect: false,
+        reconnect: true,
+        maxReconnectAttempts: -1,
+        reconnectTimeWait: Math.min(2000, Math.max(250, config.timeoutMs)),
       });
       return ok(new Broker(connection, { ...config }));
     } catch {
@@ -107,6 +109,13 @@ export class Broker implements Publisher {
 
   async close(): Promise<void> {
     await this.connection.close();
+  }
+
+  ping(caller?: AbortSignal): Promise<Result<void, Failure>> {
+    return this.operation(async (signal) => {
+      const info = await this.api('$JS.API.INFO', {}, signal);
+      if (info.error) throw new AppError(unavailable());
+    }, caller);
   }
 
   private async operation<T>(

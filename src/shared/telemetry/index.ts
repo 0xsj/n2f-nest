@@ -43,6 +43,43 @@ export function traceRef(
   return ok(ref);
 }
 
+export function parseTraceparent(value: unknown): Result<TraceRef, Failure> {
+  if (typeof value !== 'string') {
+    return err(
+      failure('invalid', 'invalid traceparent', {
+        type: 'telemetry.invalid_traceparent',
+      }),
+    );
+  }
+
+  const match = /^00-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$/.exec(value);
+  if (!match) {
+    return err(
+      failure('invalid', 'invalid traceparent', {
+        type: 'telemetry.invalid_traceparent',
+      }),
+    );
+  }
+
+  const parsed = traceRef(
+    match[1],
+    match[2],
+    (Number.parseInt(match[3], 16) & 1) === 1,
+  );
+  return parsed.ok
+    ? parsed
+    : err(
+        failure('invalid', 'invalid traceparent', {
+          type: 'telemetry.invalid_traceparent',
+        }),
+      );
+}
+
+export function formatTraceparent(ref: TraceRef): string {
+  const value = snapshot(ref);
+  return `00-${value.traceId}-${value.spanId}-${value.sampled ? '01' : '00'}`;
+}
+
 export function snapshot(ref: TraceRef): TraceSnapshot {
   const value = refs.get(ref as object);
   if (!value) {

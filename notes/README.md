@@ -26,6 +26,8 @@ would otherwise have to rediscover.
 - [Telemetry](modules/src/shared/telemetry/README.md), [health](modules/src/shared/health/README.md)
   and [events](modules/src/shared/events/README.md): SDK-free observation,
   readiness and the first event envelope seam.
+- [Platform metrics](modules/src/platform/metrics/README.md): bounded HTTP
+  counters, latency histograms and active-request instrumentation.
 - [Logger](modules/src/shared/logger/README.md) and [environment](modules/src/shared/env/README.md):
   bounded diagnostics and typed process configuration.
 - [HTTP](modules/src/shared/http/README.md), [HTTP client](modules/src/shared/httpclient/README.md),
@@ -41,6 +43,8 @@ would otherwise have to rediscover.
 - Document and Jobs module notes also record their bounded-context language, aggregate invariants, typed failures and domain-owned event vocabularies.
 - [Platform events](modules/src/platform/events/README.md): the replaceable in-process event bus and one-at-a-time durable outbox dispatcher seam.
 - [Platform runtime](modules/src/platform/runtime/README.md): explicit memory/PostgreSQL provider selection, migration startup and lifecycle ownership.
+- [Platform health](modules/src/platform/health/README.md): liveness, bounded dependency readiness and graceful drain behavior.
+- [Platform HTTP](modules/src/platform/http/README.md): request IDs, W3C trace propagation and transport-only observability context.
 - [Chaos and fault injection](modules/src/platform/chaos/README.md): opt-in resilience testing at the event acknowledgement and replay boundary.
 - [TypeScript literals and generics](language/typescript-literals-generics-and-distributed-unions.md):
   how the closed kind union and narrow failure types work.

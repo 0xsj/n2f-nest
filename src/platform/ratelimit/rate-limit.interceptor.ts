@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { Request, Response } from 'express';
-import type { Observable } from 'rxjs';
+import { from, mergeMap, type Observable } from 'rxjs';
 import { problemOf } from '../../shared/http/index.js';
 import { failure, type Failure, type Result } from '../../shared/errors/index.js';
 import { RateLimiter, type RateLimitDecision } from '../../shared/ratelimit/index.js';
@@ -62,22 +62,24 @@ export class RateLimitInterceptor implements NestInterceptor {
 
     const request = context.switchToHttp().getRequest<Request>();
     const response = context.switchToHttp().getResponse<Response>();
-    const result = this.limiter.consume(
-      `${policy.name}:${policy.key(request)}`,
-      policy,
+    return from(
+      this.limiter.consume(`${policy.name}:${policy.key(request)}`, policy),
+    ).pipe(
+      mergeMap((result) => {
+        if (!result.ok) throw failureResponse(result.error);
+
+        writeHeaders(response, result.value);
+        if (!result.value.allowed) {
+          throw failureResponse(
+            failure('rate_limited', 'request rate limit exceeded', {
+              type: 'rate_limit.exceeded',
+              fields: { policy: policy.name },
+            }),
+          );
+        }
+
+        return next.handle();
+      }),
     );
-    if (!result.ok) throw failureResponse(result.error);
-
-    writeHeaders(response, result.value);
-    if (!result.value.allowed) {
-      throw failureResponse(
-        failure('rate_limited', 'request rate limit exceeded', {
-          type: 'rate_limit.exceeded',
-          fields: { policy: policy.name },
-        }),
-      );
-    }
-
-    return next.handle();
   }
 }

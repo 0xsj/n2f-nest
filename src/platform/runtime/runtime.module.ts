@@ -145,7 +145,7 @@ export class PlatformRuntimeModule {
         NatsEventWorker,
         DatabaseLifecycle,
       ],
-      exports: [RUNTIME_CONFIG, DATABASE],
+      exports: [RUNTIME_CONFIG, DATABASE, NATS_BROKER],
     };
   }
 }

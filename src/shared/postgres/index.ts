@@ -110,11 +110,11 @@ export class Database {
     return ok(database);
   }
 
-  async ping(): Promise<Result<void, Failure>> {
+  async ping(signal?: AbortSignal): Promise<Result<void, Failure>> {
     return this.transaction(async (transaction) => {
       await transaction.query('SELECT 1');
       return ok(undefined);
-    });
+    }, signal);
   }
 
   /** Callback must await all work; the leased client must never escape its lifetime. */

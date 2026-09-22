@@ -33,6 +33,7 @@ In PostgreSQL mode, `N2F_EVENT_TRANSPORT` defaults to `nats`. Set it to
 11. Job subjects (`0011`)
 12. Document processing (`0012`)
 13. Persistence namespace rename (`0013`)
+14. Rate-limit buckets (`0014`)
 
 The migration files are configured as Nest assets because `import.meta.url`
 resolves against `dist` in a built application. A database pool is closed by
@@ -50,10 +51,17 @@ acknowledges JetStream only after those subscribers complete. Audit itself uses
 PostgreSQL in this mode, and duplicate delivery remains safe because the
 projection is idempotent by event ID.
 
+Both workers retain their polling promise and await it during module shutdown.
+Cancellation interrupts the backoff timer, while an in-flight dispatch or
+transfer is allowed to return its cancellation result before the database or
+NATS connection closes. This keeps shutdown from racing durable work.
+
 The transport is selected by `N2F_EVENT_TRANSPORT=local|nats`. NATS requires
 PostgreSQL mode because the durable outbox is its source of truth. Provisioning
 is performed by the runtime composition provider before the workers start, and
-the NATS connection closes with the Nest application.
+the NATS connection closes with the Nest application. After an initial
+successful connection, the broker keeps reconnecting with a bounded backoff;
+readiness remains unavailable until the JetStream ping succeeds again.
 
 `N2F_NATS_STREAM` defaults to the local `n2f_events` stream and
 `N2F_NATS_SUBJECT_PREFIX` defaults to `n2f.events.`. A legacy deployment can
@@ -97,6 +105,7 @@ luck.
 - `src/platform/runtime/runtime.module.ts`
 - `src/platform/runtime/outbox-worker.ts`
 - `src/platform/runtime/nats-event-worker.ts`
+- `src/platform/runtime/worker-lifecycle.spec.ts`
 - `src/platform/runtime/tokens.ts`
 - `src/app/migrations.ts`
 - `nest-cli.json`

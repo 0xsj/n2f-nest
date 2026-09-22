@@ -13,6 +13,8 @@ import { RequestLoggerMiddleware } from './platform/http/request-logger.middlewa
 import { PlatformEventsModule } from './platform/events/events.module.js';
 import { PlatformRuntimeModule } from './platform/runtime/runtime.module.js';
 import { PlatformRateLimitModule } from './platform/ratelimit/index.js';
+import { PlatformHealthModule } from './platform/health/index.js';
+import { PlatformMetricsModule } from './platform/metrics/index.js';
 import { appMigrations } from './app/migrations.js';
 import { DocumentProcessingModule } from './workflows/document-processing/index.js';
 
@@ -22,6 +24,8 @@ import { DocumentProcessingModule } from './workflows/document-processing/index.
     PlatformEventsModule,
     PlatformRuntimeModule.forRoot(appMigrations),
     PlatformRateLimitModule,
+    PlatformHealthModule,
+    PlatformMetricsModule,
     IdentityModule,
     OrganizationModule,
     DocumentModule,

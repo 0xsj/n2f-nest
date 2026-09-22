@@ -5,6 +5,7 @@ export {
   type RateLimitStore,
 } from '../../shared/ratelimit/index.js';
 export { InMemoryRateLimitStore } from './in-memory-store.js';
+export { PostgresRateLimitStore } from './postgres/index.js';
 export {
   RateLimit,
   RATE_LIMIT_POLICY,

@@ -24,7 +24,10 @@
     "test:postgres": "N2F_RUN_POSTGRES_INTEGRATION=1 N2F_STORAGE=postgres N2F_EVENT_TRANSPORT=local vitest run test/postgres.integration.spec.ts",
     "test:nats": "N2F_RUN_POSTGRES_INTEGRATION=1 N2F_RUN_NATS_INTEGRATION=1 N2F_STORAGE=postgres N2F_EVENT_TRANSPORT=nats N2F_NATS_STREAM=n2f_events N2F_NATS_SUBJECT_PREFIX=n2f.events. vitest run --no-file-parallelism test/postgres.integration.spec.ts src/shared/events/nats/broker.integration.spec.ts",
     "test:recovery": "N2F_RUN_RECOVERY_INTEGRATION=1 vitest run --no-file-parallelism test/outbox-recovery.integration.spec.ts",
+    "test:audit-redelivery": "N2F_RUN_AUDIT_REDELIVERY=1 vitest run --no-file-parallelism test/audit-redelivery.integration.spec.ts",
     "test:e2e:persistent": "N2F_RUN_PERSISTENT_E2E=1 vitest run --no-file-parallelism test/persistent-e2e.integration.spec.ts",
+    "test:restart": "N2F_RUN_RESTART_INTEGRATION=1 vitest run --no-file-parallelism test/process-restart.integration.spec.ts",
+    "test:rate-limit-cluster": "N2F_RUN_RATE_LIMIT_CLUSTER=1 vitest run --no-file-parallelism test/rate-limit-cluster.integration.spec.ts",
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --no-file-parallelism"

@@ -24,12 +24,12 @@ class TestStore implements RateLimitStore {
 }
 
 describe('RateLimiter', () => {
-  it('passes policy keys and clock time to the replaceable store', () => {
+  it('passes policy keys and clock time to the replaceable store', async () => {
     const clock = new FakeClock(new Date('2026-09-21T00:00:00.000Z'));
     const store = new TestStore();
     const limiter = new RateLimiter(store, clock);
 
-    const result = limiter.consume('identity.login:client', {
+    const result = await limiter.consume('identity.login:client', {
       limit: 10,
       windowMs: 60_000,
     });

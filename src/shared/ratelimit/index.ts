@@ -25,7 +25,7 @@ export type RateLimitConsumeInput = Readonly<{
 export interface RateLimitStore {
   consume(
     input: RateLimitConsumeInput,
-  ): Result<RateLimitDecision, Failure>;
+  ): Result<RateLimitDecision, Failure> | Promise<Result<RateLimitDecision, Failure>>;
 }
 
 /** Framework-free rate-limit coordinator. Policy and storage remain replaceable. */
@@ -38,7 +38,7 @@ export class RateLimiter {
   consume(
     key: string,
     rule: RateLimitRule,
-  ): Result<RateLimitDecision, Failure> {
-    return this.store.consume({ key, rule, now: this.clock.now() });
+  ): Promise<Result<RateLimitDecision, Failure>> {
+    return Promise.resolve(this.store.consume({ key, rule, now: this.clock.now() }));
   }
 }

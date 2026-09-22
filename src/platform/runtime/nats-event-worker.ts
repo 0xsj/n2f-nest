@@ -15,8 +15,18 @@ import { NATS_BROKER } from './tokens.js';
 
 const POLL_MS = 250;
 
-function wait(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+function wait(milliseconds: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.resolve();
+
+  return new Promise((resolve) => {
+    const done = (): void => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', done);
+      resolve();
+    };
+    const timer = setTimeout(done, milliseconds);
+    signal?.addEventListener('abort', done, { once: true });
+  });
 }
 
 /** Bridges one JetStream delivery into local subscribers before ACK. */
@@ -28,6 +38,7 @@ export class NatsEventWorker
   private readonly sink: DurableInProcessPublisher;
   private active = false;
   private abort?: AbortController;
+  private pollTask?: Promise<void>;
 
   constructor(
     @Inject(NATS_BROKER) private readonly broker: Broker | undefined,
@@ -40,12 +51,14 @@ export class NatsEventWorker
     if (!this.broker) return;
     this.active = true;
     this.abort = new AbortController();
-    void this.poll();
+    this.pollTask = this.poll();
   }
 
   async onModuleDestroy(): Promise<void> {
     this.active = false;
     this.abort?.abort();
+    await this.pollTask;
+    this.pollTask = undefined;
     await this.broker?.close();
   }
 
@@ -61,11 +74,11 @@ export class NatsEventWorker
         this.logger.error(
           `NATS event transfer failed: ${result.error.type ?? result.error.kind}`,
         );
-        await wait(POLL_MS);
+        await wait(POLL_MS, this.abort?.signal);
         continue;
       }
 
-      await wait(result.value ? 10 : POLL_MS);
+      await wait(result.value ? 10 : POLL_MS, this.abort?.signal);
     }
   }
 }

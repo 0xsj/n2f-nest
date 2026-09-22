@@ -21,6 +21,7 @@ import {
   migration as organizationMigration,
 } from '../modules/organization/infra/postgres/index.js';
 import { namespaceMigration } from './migrations/namespace.js';
+import { migration as rateLimitMigration } from '../platform/ratelimit/postgres/index.js';
 
 export const appMigrations = [
   eventsMigration(1),
@@ -36,4 +37,5 @@ export const appMigrations = [
   jobsSubjectMigration(11),
   documentProcessingMigration(12),
   namespaceMigration(13),
+  rateLimitMigration(14),
 ] as const;

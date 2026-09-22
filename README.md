@@ -63,6 +63,39 @@ It verifies that a lost publisher acknowledgement leaves the PostgreSQL
 outbox pending, a replay marks it sent, and JetStream delivers the event once
 because the event ID is the deduplication key.
 
+The durable Audit redelivery check exercises the consumer side separately. It
+writes the audit projection, simulates an acknowledgement failure, redelivers
+the same JetStream event and verifies that the event-ID uniqueness boundary
+leaves exactly one PostgreSQL audit row:
+
+```bash
+make backend-test-audit-redelivery
+```
+
+The opt-in chaos check exercises the same acknowledgement and replay boundaries
+with the in-process fault-injection harness:
+
+```bash
+make backend-test-chaos
+```
+
+The environment-level NATS recovery check restarts the project-owned NATS
+container, waits for readiness to recover, and then reruns the durable HTTP and
+Audit workflow:
+
+```bash
+make backend-test-nats-restart
+```
+
+The process-restart check starts the compiled backend on port `7301`, creates
+durable Identity, session, Organization and Document state, terminates the
+process, starts it again with the same NATS consumer, and verifies the state
+through the HTTP API:
+
+```bash
+make backend-test-restart
+```
+
 For a network-level smoke against the running persistent backend, start it
 from the integration workspace and run the TCP E2E target:
 
@@ -73,8 +106,10 @@ make backend-test-persistent-e2e
 
 This exercises the real HTTP boundary for registration, verification, login,
 organization and document-processing workflows, session revocation and
-asynchronous Audit delivery. The in-process durable integration remains the
-broader persistence and adapter test.
+asynchronous Audit delivery. The target clears only the E2E registration
+rate-limit buckets through the supplied database URL so repeated local runs do
+not inherit the previous run's client-IP quota. The in-process durable
+integration remains the broader persistence and adapter test.
 
 The [`requests/identity.http`](requests/identity.http) file contains the
 Kulala-friendly register, verify, login, current-identity and logout flow.
@@ -104,6 +139,11 @@ that delivers to the PostgreSQL-backed Audit projection. Set
 `N2F_EVENT_TRANSPORT=local` when a self-contained process-local publisher is
 preferred.
 
+PostgreSQL mode also selects the durable rate-limit store. Memory mode keeps
+rate-limit buckets inside the process for lightweight development; the shared
+rate-limit port remains asynchronous so another distributed store can be
+introduced without changing endpoint policies.
+
 The Organization module currently supports authenticated listing, creation,
 adding an existing active Identity, owner-authorized role changes and
 owner-authorized revocation of non-owner memberships. Invitations remain a
@@ -122,6 +162,29 @@ either domain into the other, and Audit remains the event-observing foundation.
 
 The repository-level `Makefile` also provides the normal frontend, backend and
 infrastructure commands.
+
+The backend exposes unauthenticated operational probes:
+
+```text
+GET /health/live   # process liveness; does not query dependencies
+GET /health/ready  # bounded PostgreSQL and JetStream readiness
+GET /health        # readiness alias
+GET /metrics       # process-local HTTP counters and latency histograms
+```
+
+Readiness drains during graceful shutdown while liveness remains a process
+probe. The probe response intentionally does not disclose dependency details.
+
+HTTP requests also accept and return W3C `traceparent` headers. Each request
+creates a fresh server span while retaining the incoming trace ID; malformed
+trace headers are ignored and replaced with a local context. Trace and span
+identifiers are included in the request-completion logs without adding
+observability SDK types to domain ports.
+
+The `/metrics` endpoint renders bounded process-local HTTP metrics in
+Prometheus text format. It uses route templates rather than raw URLs to avoid
+turning path identifiers into unbounded metric labels; deployment boundaries
+should restrict access to the operational endpoint.
 
 ## Shape
 

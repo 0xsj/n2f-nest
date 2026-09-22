@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import { Client } from 'pg';
 
 const enabled = process.env.N2F_RUN_PERSISTENT_E2E === '1';
 const integration = enabled ? describe : describe.skip;
@@ -25,6 +26,22 @@ async function jsonRequest(
   }
 
   return { status: response.status, body };
+}
+
+async function resetRegistrationRateLimits(): Promise<void> {
+  const databaseUrl = process.env.N2F_DATABASE_URL;
+  if (!databaseUrl) return;
+
+  const client = new Client({ connectionString: databaseUrl });
+  try {
+    await client.connect();
+    await client.query(
+      `DELETE FROM public.n2f_rate_limits
+       WHERE bucket_key LIKE 'identity.register:%'`,
+    );
+  } finally {
+    await client.end();
+  }
 }
 
 function postJson(path: string, body: unknown, token?: string): Promise<JsonResponse> {
@@ -57,15 +74,68 @@ async function eventually<T>(
 
 integration('Persistent HTTP E2E', () => {
   it('completes the cross-domain workflow through the running backend', async () => {
+    await resetRegistrationRateLimits();
+
     const email = `persistent-e2e-${randomUUID()}@example.com`;
     const password = 'correct-horse-7';
 
+    const liveness = await jsonRequest('/health/live');
+    expect(liveness).toEqual({ status: 200, body: { status: 'live' } });
+
+    const traceResponse = await fetch(`${baseUrl}/health/live`, {
+      headers: {
+        traceparent:
+          '00-0123456789abcdef0123456789abcdef-0123456789abcdef-01',
+      },
+    });
+    expect(traceResponse.status).toBe(200);
+    expect(traceResponse.headers.get('traceparent')).toMatch(
+      /^00-0123456789abcdef0123456789abcdef-(?!0123456789abcdef)[0-9a-f]{16}-01$/,
+    );
+
+    const readiness = await jsonRequest('/health/ready');
+    expect(readiness).toEqual({ status: 200, body: { status: 'ready' } });
+
+    const metricsResponse = await fetch(`${baseUrl}/metrics`);
+    expect(metricsResponse.status).toBe(200);
+    expect(metricsResponse.headers.get('content-type')).toContain(
+      'text/plain',
+    );
+    expect(await metricsResponse.text()).toContain('n2f_http_requests_total');
+
+    const rateLimitedEmail = `persistent-rate-limit-${randomUUID()}@example.com`;
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const refusedLogin = await postJson('/identity/login', {
+        email: rateLimitedEmail,
+        password: 'wrong-password',
+      });
+      expect(refusedLogin.status).toBe(401);
+    }
+    const limitedLogin = await postJson('/identity/login', {
+      email: rateLimitedEmail,
+      password: 'wrong-password',
+    });
+    expect(limitedLogin.status).toBe(429);
+    expect(limitedLogin.body).toMatchObject({
+      code: 'rate_limit.exceeded',
+      request_id: expect.any(String),
+    });
+
     const unauthenticatedOrganizations = await jsonRequest('/organizations');
     expect(unauthenticatedOrganizations.status).toBe(401);
+    expect(unauthenticatedOrganizations.body.request_id).toEqual(
+      expect.any(String),
+    );
 
     const registered = await postJson('/identity/register', { email, password });
     expect(registered.status).toBe(201);
     expect(registered.body.status).toBe('pending_verification');
+
+    const duplicateRegistration = await postJson('/identity/register', {
+      email,
+      password,
+    });
+    expect(duplicateRegistration.status).toBe(409);
 
     const identityId = registered.body.identityId as string;
     const challenge = await postJson('/identity/verification-challenges', {
@@ -173,6 +243,22 @@ integration('Persistent HTTP E2E', () => {
       documentStatus: 'processing',
       jobStatus: 'queued',
       jobCreated: true,
+    });
+
+    const repeatedProcessing = await postJson(
+      `/organizations/${organizationId}/documents/${documentId}/process`,
+      { maxAttempts: 2 },
+      sessionToken,
+    );
+    expect(repeatedProcessing).toEqual({
+      status: 201,
+      body: {
+        documentId,
+        jobId: processing.body.jobId,
+        documentStatus: 'processing',
+        jobStatus: 'queued',
+        jobCreated: false,
+      },
     });
 
     const processingJobId = processing.body.jobId as string;

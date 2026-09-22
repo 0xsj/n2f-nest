@@ -10,8 +10,18 @@ import type { OutboxDispatcher } from '../events/outbox-dispatcher.js';
 
 const POLL_MS = 250;
 
-function wait(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+function wait(milliseconds: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.resolve();
+
+  return new Promise((resolve) => {
+    const done = (): void => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', done);
+      resolve();
+    };
+    const timer = setTimeout(done, milliseconds);
+    signal?.addEventListener('abort', done, { once: true });
+  });
 }
 
 /** Local lifecycle coordinator for one-at-a-time PostgreSQL outbox delivery. */
@@ -20,6 +30,7 @@ export class OutboxWorker implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger('OutboxWorker');
   private active = false;
   private abort?: AbortController;
+  private pollTask?: Promise<void>;
 
   constructor(
     @Inject(OUTBOX_DISPATCHER)
@@ -30,12 +41,14 @@ export class OutboxWorker implements OnApplicationBootstrap, OnModuleDestroy {
     if (!this.dispatcher) return;
     this.active = true;
     this.abort = new AbortController();
-    void this.poll();
+    this.pollTask = this.poll();
   }
 
-  onModuleDestroy(): void {
+  async onModuleDestroy(): Promise<void> {
     this.active = false;
     this.abort?.abort();
+    await this.pollTask;
+    this.pollTask = undefined;
   }
 
   private async poll(): Promise<void> {
@@ -47,11 +60,11 @@ export class OutboxWorker implements OnApplicationBootstrap, OnModuleDestroy {
         this.logger.error(
           `outbox delivery attempt failed: ${result.error.type ?? result.error.kind}`,
         );
-        await wait(POLL_MS);
+        await wait(POLL_MS, this.abort?.signal);
         continue;
       }
 
-      await wait(result.value ? 10 : POLL_MS);
+      await wait(result.value ? 10 : POLL_MS, this.abort?.signal);
     }
   }
 }
