@@ -56,9 +56,12 @@ async function eventually<T>(
 }
 
 integration('Persistent HTTP E2E', () => {
-  it('completes identity and audit delivery through the running backend', async () => {
+  it('completes the cross-domain workflow through the running backend', async () => {
     const email = `persistent-e2e-${randomUUID()}@example.com`;
     const password = 'correct-horse-7';
+
+    const unauthenticatedOrganizations = await jsonRequest('/organizations');
+    expect(unauthenticatedOrganizations.status).toBe(401);
 
     const registered = await postJson('/identity/register', { email, password });
     expect(registered.status).toBe(201);
@@ -79,6 +82,12 @@ integration('Persistent HTTP E2E', () => {
       body: { identityId, status: 'active' },
     });
 
+    const invalidLogin = await postJson('/identity/login', {
+      email,
+      password: 'wrong-password',
+    });
+    expect(invalidLogin.status).toBe(401);
+
     const loggedIn = await postJson('/identity/login', { email, password });
     expect(loggedIn.status).toBe(201);
     expect(loggedIn.body.identityId).toBe(identityId);
@@ -89,6 +98,246 @@ integration('Persistent HTTP E2E', () => {
     });
     expect(current.status).toBe(200);
     expect(current.body).toMatchObject({ identityId, status: 'active' });
+
+    const organization = await postJson(
+      '/organizations',
+      {
+        name: 'Persistent E2E Organization',
+        slug: `persistent-${randomUUID().slice(0, 8)}`,
+      },
+      sessionToken,
+    );
+    expect(organization.status).toBe(201);
+    expect(organization.body).toEqual({
+      organizationId: expect.any(String),
+      ownerMembershipId: expect.any(String),
+    });
+
+    const organizations = await jsonRequest('/organizations', {
+      headers: { authorization: `Bearer ${sessionToken}` },
+    });
+    expect(organizations.status).toBe(200);
+    expect(organizations.body).toEqual([
+      {
+        organizationId: organization.body.organizationId,
+        name: 'Persistent E2E Organization',
+        slug: expect.stringMatching(/^persistent-[a-f0-9]{8}$/),
+        status: 'active',
+        membershipId: organization.body.ownerMembershipId,
+        role: 'owner',
+        membershipStatus: 'active',
+      },
+    ]);
+
+    const ownerRoleChange = await jsonRequest(
+      `/organizations/${organization.body.organizationId}/memberships/${organization.body.ownerMembershipId}/role`,
+      {
+        method: 'PATCH',
+        headers: {
+          authorization: `Bearer ${sessionToken}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ role: 'admin' }),
+      },
+    );
+    expect(ownerRoleChange.status).toBe(403);
+
+    const organizationId = organization.body.organizationId as string;
+    const document = await postJson(
+      `/organizations/${organizationId}/documents`,
+      {
+        name: 'Persistent E2E document.pdf',
+        storageKey: 'documents/persistent-e2e-document.pdf',
+      },
+      sessionToken,
+    );
+    expect(document.status).toBe(201);
+    expect(document.body).toEqual({
+      documentId: expect.any(String),
+      organizationId,
+      name: 'Persistent E2E document.pdf',
+      storageKey: 'documents/persistent-e2e-document.pdf',
+      status: 'active',
+    });
+
+    const documentId = document.body.documentId as string;
+    const processing = await postJson(
+      `/organizations/${organizationId}/documents/${documentId}/process`,
+      { maxAttempts: 2 },
+      sessionToken,
+    );
+    expect(processing.status).toBe(201);
+    expect(processing.body).toEqual({
+      documentId,
+      jobId: expect.any(String),
+      documentStatus: 'processing',
+      jobStatus: 'queued',
+      jobCreated: true,
+    });
+
+    const processingJobId = processing.body.jobId as string;
+    const started = await postJson(
+      `/organizations/${organizationId}/jobs/${processingJobId}/start`,
+      undefined,
+      sessionToken,
+    );
+    expect(started.status).toBe(200);
+
+    const completed = await postJson(
+      `/organizations/${organizationId}/jobs/${processingJobId}/complete`,
+      undefined,
+      sessionToken,
+    );
+    expect(completed.status).toBe(200);
+
+    const processed = await eventually(
+      async () =>
+        jsonRequest(
+          `/organizations/${organizationId}/documents/${documentId}`,
+          { headers: { authorization: `Bearer ${sessionToken}` } },
+        ),
+      (response) =>
+        response.status === 200 && response.body.status === 'processed',
+    );
+    expect(processed.body.status).toBe('processed');
+
+    const archived = await postJson(
+      `/organizations/${organizationId}/documents/${documentId}/archive`,
+      undefined,
+      sessionToken,
+    );
+    expect(archived.status).toBe(200);
+    expect(archived.body).toEqual({
+      documentId,
+      status: 'archived',
+      archivedAt: expect.any(String),
+    });
+
+    const memberEmail = `persistent-member-${randomUUID()}@example.com`;
+    const memberPassword = 'correct-horse-7';
+    const memberRegistered = await postJson('/identity/register', {
+      email: memberEmail,
+      password: memberPassword,
+    });
+    expect(memberRegistered.status).toBe(201);
+
+    const memberIdentityId = memberRegistered.body.identityId as string;
+    const memberChallenge = await postJson('/identity/verification-challenges', {
+      identityId: memberIdentityId,
+    });
+    expect(memberChallenge.status).toBe(201);
+
+    const memberVerified = await postJson('/identity/verify', {
+      challengeId: memberChallenge.body.challengeId,
+      token: memberChallenge.body.token,
+    });
+    expect(memberVerified).toEqual({
+      status: 201,
+      body: { identityId: memberIdentityId, status: 'active' },
+    });
+
+    const invitation = await postJson(
+      `/organizations/${organizationId}/invitations`,
+      { identityId: memberIdentityId, role: 'member' },
+      sessionToken,
+    );
+    expect(invitation.status).toBe(201);
+    expect(invitation.body).toMatchObject({
+      invitationId: expect.any(String),
+      identityId: memberIdentityId,
+      role: 'member',
+      status: 'pending',
+      expiresAt: expect.any(String),
+    });
+
+    const memberLoggedIn = await postJson('/identity/login', {
+      email: memberEmail,
+      password: memberPassword,
+    });
+    expect(memberLoggedIn.status).toBe(201);
+    const memberSessionToken = memberLoggedIn.body.token as string;
+
+    const accepted = await postJson(
+      `/organizations/${organizationId}/invitations/${invitation.body.invitationId}/accept`,
+      undefined,
+      memberSessionToken,
+    );
+    expect(accepted.status).toBe(201);
+    expect(accepted.body).toMatchObject({
+      invitationId: invitation.body.invitationId,
+      membershipId: expect.any(String),
+      organizationId,
+      identityId: memberIdentityId,
+      role: 'member',
+    });
+
+    const memberOrganizations = await jsonRequest('/organizations', {
+      headers: { authorization: `Bearer ${memberSessionToken}` },
+    });
+    expect(memberOrganizations.status).toBe(200);
+    expect(memberOrganizations.body).toEqual([
+      {
+        organizationId,
+        name: 'Persistent E2E Organization',
+        slug: expect.stringMatching(/^persistent-[a-f0-9]{8}$/),
+        status: 'active',
+        membershipId: accepted.body.membershipId,
+        role: 'member',
+        membershipStatus: 'active',
+      },
+    ]);
+
+    const memberDocument = await jsonRequest(
+      `/organizations/${organizationId}/documents/${documentId}`,
+      { headers: { authorization: `Bearer ${memberSessionToken}` } },
+    );
+    expect(memberDocument.status).toBe(200);
+    expect(memberDocument.body).toMatchObject({
+      documentId,
+      status: 'archived',
+    });
+
+    const revokedMembership = await jsonRequest(
+      `/organizations/${organizationId}/memberships/${accepted.body.membershipId}`,
+      {
+        method: 'DELETE',
+        headers: { authorization: `Bearer ${sessionToken}` },
+      },
+    );
+    expect(revokedMembership).toEqual({
+      status: 200,
+      body: { membershipId: accepted.body.membershipId, status: 'revoked' },
+    });
+
+    const revokedMemberOrganizations = await jsonRequest('/organizations', {
+      headers: { authorization: `Bearer ${memberSessionToken}` },
+    });
+    expect(revokedMemberOrganizations).toEqual({ status: 200, body: [] });
+
+    const revokedMemberDocument = await jsonRequest(
+      `/organizations/${organizationId}/documents/${documentId}`,
+      { headers: { authorization: `Bearer ${memberSessionToken}` } },
+    );
+    expect(revokedMemberDocument.status).toBe(403);
+
+    const revokedMemberDocuments = await jsonRequest(
+      `/organizations/${organizationId}/documents`,
+      { headers: { authorization: `Bearer ${memberSessionToken}` } },
+    );
+    expect(revokedMemberDocuments.status).toBe(403);
+
+    const revokedMemberJobs = await jsonRequest(
+      `/organizations/${organizationId}/jobs`,
+      { headers: { authorization: `Bearer ${memberSessionToken}` } },
+    );
+    expect(revokedMemberJobs.status).toBe(403);
+
+    const revokedMemberTransition = await postJson(
+      `/organizations/${organizationId}/jobs/${processingJobId}/start`,
+      undefined,
+      memberSessionToken,
+    );
+    expect(revokedMemberTransition.status).toBe(403);
 
     const loggedOut = await postJson('/identity/logout', undefined, sessionToken);
     expect(loggedOut).toEqual({
@@ -108,6 +357,10 @@ integration('Persistent HTTP E2E', () => {
       'identity.verified.v1',
       'identity.session.created.v1',
       'identity.session.revoked.v1',
+      'organization.created.v1',
+      'organization.membership.added.v1',
+      'document.created.v1',
+      'document.archived.v1',
     ];
     const audit = await eventually(
       async () => jsonRequest('/audit/entries'),
@@ -116,7 +369,8 @@ integration('Persistent HTTP E2E', () => {
         expectedEventTypes.every((eventType) =>
           response.body.some(
             (entry: { eventType?: string; subject?: { id?: string } }) =>
-              entry.eventType === eventType && entry.subject?.id === identityId,
+              entry.eventType === eventType &&
+              entry.subject?.id === identityId,
           ),
         ),
     );
@@ -124,8 +378,62 @@ integration('Persistent HTTP E2E', () => {
     const identityAudit = audit.body.filter(
       (entry: { subject?: { id?: string } }) => entry.subject?.id === identityId,
     );
-    expect(identityAudit.map((entry: { eventType: string }) => entry.eventType).sort()).toEqual(
-      expectedEventTypes.sort(),
+    const identityEventTypes = identityAudit.map(
+      (entry: { eventType: string }) => entry.eventType,
     );
+    for (const eventType of expectedEventTypes) {
+      expect(identityEventTypes).toContain(eventType);
+    }
+
+    const workflowAudit = await eventually(
+      async () => jsonRequest('/audit/entries'),
+      (response) =>
+        response.status === 200 &&
+        ['document.processing.started.v1', 'document.processing.completed.v1'].every(
+          (eventType) =>
+            response.body.some(
+              (entry: { eventType?: string; subject?: { id?: string } }) =>
+                entry.eventType === eventType && entry.subject?.id === documentId,
+            ),
+        ),
+    );
+    expect(
+      workflowAudit.body.filter(
+        (entry: { eventType?: string; subject?: { id?: string } }) =>
+          entry.subject?.id === documentId &&
+          [
+            'document.processing.started.v1',
+            'document.processing.completed.v1',
+          ].includes(entry.eventType ?? ''),
+      ),
+    ).toHaveLength(2);
+
+    const memberEventTypes = [
+      'organization.invitation.created.v1',
+      'organization.invitation.accepted.v1',
+      'organization.membership.added.v1',
+      'organization.membership.revoked.v1',
+    ];
+    const memberAudit = await eventually(
+      async () => jsonRequest('/audit/entries'),
+      (response) =>
+        response.status === 200 &&
+        memberEventTypes.every((eventType) =>
+          response.body.some(
+            (entry: { eventType?: string; subject?: { id?: string } }) =>
+              entry.eventType === eventType &&
+              entry.subject?.id === memberIdentityId,
+          ),
+        ),
+    );
+    const observedMemberEventTypes = memberAudit.body
+      .filter(
+        (entry: { eventType?: string; subject?: { id?: string } }) =>
+          entry.subject?.id === memberIdentityId,
+      )
+      .map((entry: { eventType: string }) => entry.eventType);
+    for (const eventType of memberEventTypes) {
+      expect(observedMemberEventTypes).toContain(eventType);
+    }
   }, 15000);
 });

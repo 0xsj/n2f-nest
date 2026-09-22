@@ -49,6 +49,20 @@ The outbox publishes to JetStream, and the NATS worker forwards deliveries to
 the local Audit subscriber before acknowledging them. The command also checks
 that a failed destination is redelivered before ACK.
 
+The outbox recovery check exercises the durable ambiguous-publish window. Run
+it with the application process stopped so no second outbox worker can claim
+the fixture row:
+
+```bash
+N2F_DATABASE_URL=postgres://n2f:n2f_local@127.0.0.1:7220/n2f \
+N2F_NATS_URL=nats://127.0.0.1:7222 \
+bun run test:recovery
+```
+
+It verifies that a lost publisher acknowledgement leaves the PostgreSQL
+outbox pending, a replay marks it sent, and JetStream delivers the event once
+because the event ID is the deduplication key.
+
 For a network-level smoke against the running persistent backend, start it
 from the integration workspace and run the TCP E2E target:
 
@@ -58,8 +72,9 @@ make backend-test-persistent-e2e
 ```
 
 This exercises the real HTTP boundary for registration, verification, login,
-session revocation and asynchronous Audit delivery. The in-process durable
-integration remains the broader cross-domain persistence test.
+organization and document-processing workflows, session revocation and
+asynchronous Audit delivery. The in-process durable integration remains the
+broader persistence and adapter test.
 
 The [`requests/identity.http`](requests/identity.http) file contains the
 Kulala-friendly register, verify, login, current-identity and logout flow.
