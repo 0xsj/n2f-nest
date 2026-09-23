@@ -65,7 +65,7 @@ jobs:
           mkdir -p ci-logs
           docker compose -f compose.yaml logs --no-color > ci-logs/infrastructure.log 2>&1 || true
           cp /tmp/n2f-e2e-backend.log ci-logs/ 2>/dev/null || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: durable-logs
@@ -91,7 +91,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
       - run: make install
       - run: make mutation
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: mutation-report
