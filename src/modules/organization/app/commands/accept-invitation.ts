@@ -149,6 +149,8 @@ export class AcceptInvitation {
         invitation_id: accepted.value.id,
         role: accepted.value.role,
       },
+      { kind: 'invitation', id: accepted.value.id },
+      accepted.value.organizationId,
     );
     if (!invitationEvent.ok) return err(dependencyFailure(invitationEvent.error, 'event.create'));
 
@@ -166,6 +168,8 @@ export class AcceptInvitation {
         role: membership.value.role,
         invitation_id: accepted.value.id,
       },
+      { kind: 'membership', id: membership.value.id },
+      membership.value.organizationId,
     );
     if (!membershipEvent.ok) return err(dependencyFailure(membershipEvent.error, 'event.create'));
 

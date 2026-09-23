@@ -144,6 +144,7 @@ describe('Jobs PostgreSQL adapter contract', () => {
         started_at: job.startedAt,
         finished_at: job.finishedAt,
         failure_code: job.failureCode,
+        version: 1,
       },
     ]);
 

@@ -35,7 +35,7 @@ const runtime = create({
   format: 'json',
   level: 'info',
   clock,
-  resource: { name: 'signals-backend' },
+  resource: { name: 'n2f-nest' },
   sink,
 });
 

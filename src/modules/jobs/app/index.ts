@@ -14,6 +14,12 @@ export {
   type TransitionJobResult,
 } from './commands/index.js';
 export {
+  ExpireStaleJobs,
+  JOB_TIMED_OUT,
+  type ExpireStaleJobsCommand,
+  type ExpireStaleJobsResult,
+} from './commands/index.js';
+export {
   SubmitWorkflowJob,
   type SubmitWorkflowJobCommand,
   type SubmitWorkflowJobDependencies,

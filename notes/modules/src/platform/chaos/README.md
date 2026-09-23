@@ -9,8 +9,9 @@ adapter seams while keeping recovery policy in the system under test.
 `FaultInjector` supports one-shot, repeated and always-on failures, plus
 bounded delays and cancellation. It records observations so a test can assert
 that the intended fault actually occurred. `ChaosEventBus` wraps the real
-in-process event bus and injects faults before and after publication or
-subscription.
+`EventDelivery` and injects faults before and after publication or around one
+consumer's handler; a fault's optional `consumer` field limits it to one named
+consumer, so a test can fail Audit while `document-processing` proceeds.
 
 The same injector can wrap the generic `Publisher`, `OutboxStore` and
 `TransactionDatabase` seams through `ChaosPublisher`, `ChaosOutboxStore` and
@@ -40,6 +41,11 @@ an environment-level restart should therefore produce a temporary readiness
 failure followed by recovery without replacing the backend process. The root
 `make backend-test-nats-restart` target automates that interruption and then
 walks the durable HTTP/Audit workflow.
+
+The PostgreSQL pool similarly discards failed clients and establishes new
+connections after the dependency returns. `make backend-test-postgres-restart`
+automates a short database stop/start window and verifies the same durable
+workflow after readiness recovers.
 
 ## Limits
 

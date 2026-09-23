@@ -4,6 +4,8 @@ import { NestFactory } from '@nestjs/core';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module.js';
+import { eventually } from './support/eventually.js';
+import { mailbox, verificationFrom } from './support/mail.js';
 
 const enabled = process.env.N2F_RUN_ORGANIZATION_INTEGRATION === '1';
 const integration = enabled ? describe : describe.skip;
@@ -32,19 +34,14 @@ integration('Organization runtime integration', () => {
     const registered = await request(server)
       .post('/identity/register')
       .send({ email, password });
-    expect(registered.status).toBe(201);
+    expect(registered.status).toBe(202);
 
-    const challenged = await request(server)
-      .post('/identity/verification-challenges')
-      .send({ identityId: registered.body.identityId });
-    expect(challenged.status).toBe(201);
+    const challenged = await request(server).get(mailbox(email));
+    expect(challenged.status).toBe(200);
 
     const verified = await request(server)
       .post('/identity/verify')
-      .send({
-        challengeId: challenged.body.challengeId,
-        token: challenged.body.token,
-      });
+      .send(verificationFrom(challenged.body[0]));
     expect(verified.status).toBe(201);
 
     const loggedIn = await request(server)
@@ -63,167 +60,6 @@ integration('Organization runtime integration', () => {
       ownerMembershipId: expect.any(String),
     });
 
-    const document = await request(server)
-      .post(`/organizations/${created.body.organizationId}/documents`)
-      .set('Authorization', `Bearer ${loggedIn.body.token}`)
-      .send({
-        name: 'Contract.pdf',
-        storageKey: 'documents/contract.pdf',
-      });
-
-    expect(document.status).toBe(201);
-    expect(document.body).toEqual({
-      documentId: expect.any(String),
-      organizationId: created.body.organizationId,
-      name: 'Contract.pdf',
-      storageKey: 'documents/contract.pdf',
-      status: 'active',
-    });
-
-    const listedDocuments = await request(server)
-      .get(`/organizations/${created.body.organizationId}/documents`)
-      .set('Authorization', `Bearer ${loggedIn.body.token}`);
-
-    expect(listedDocuments.status).toBe(200);
-    expect(listedDocuments.body).toEqual([
-      {
-        documentId: document.body.documentId,
-        organizationId: created.body.organizationId,
-        name: 'Contract.pdf',
-        storageKey: 'documents/contract.pdf',
-        status: 'active',
-        createdAt: expect.any(String),
-        updatedAt: expect.any(String),
-        archivedAt: null,
-      },
-    ]);
-
-    const archivedDocument = await request(server)
-      .post(
-        `/organizations/${created.body.organizationId}/documents/${document.body.documentId}/archive`,
-      )
-      .set('Authorization', `Bearer ${loggedIn.body.token}`);
-
-    expect(archivedDocument.status).toBe(200);
-    expect(archivedDocument.body).toEqual({
-      documentId: document.body.documentId,
-      status: 'archived',
-      archivedAt: expect.any(String),
-    });
-
-    const fetchedDocument = await request(server)
-      .get(
-        `/organizations/${created.body.organizationId}/documents/${document.body.documentId}`,
-      )
-      .set('Authorization', `Bearer ${loggedIn.body.token}`);
-
-    expect(fetchedDocument.status).toBe(200);
-    expect(fetchedDocument.body).toMatchObject({
-      documentId: document.body.documentId,
-      status: 'archived',
-      archivedAt: expect.any(String),
-    });
-
-    const submittedJob = await request(server)
-      .post(`/organizations/${created.body.organizationId}/jobs`)
-      .set('Authorization', `Bearer ${loggedIn.body.token}`)
-      .send({ kind: 'document.process', maxAttempts: 2 });
-
-    expect(submittedJob.status).toBe(201);
-    expect(submittedJob.body).toEqual({
-      jobId: expect.any(String),
-      organizationId: created.body.organizationId,
-      kind: 'document.process',
-      status: 'queued',
-      attempts: 0,
-      maxAttempts: 2,
-    });
-
-    const startedJob = await request(server)
-      .post(
-        `/organizations/${created.body.organizationId}/jobs/${submittedJob.body.jobId}/start`,
-      )
-      .set('Authorization', `Bearer ${loggedIn.body.token}`);
-    expect(startedJob.status).toBe(200);
-    expect(startedJob.body).toMatchObject({
-      jobId: submittedJob.body.jobId,
-      status: 'running',
-      attempts: 1,
-      finishedAt: null,
-    });
-
-    const failedJob = await request(server)
-      .post(
-        `/organizations/${created.body.organizationId}/jobs/${submittedJob.body.jobId}/fail`,
-      )
-      .set('Authorization', `Bearer ${loggedIn.body.token}`)
-      .send({ failureCode: 'provider.timeout' });
-    expect(failedJob.status).toBe(200);
-    expect(failedJob.body).toMatchObject({
-      jobId: submittedJob.body.jobId,
-      status: 'failed',
-      attempts: 1,
-      finishedAt: expect.any(String),
-    });
-
-    const retriedJob = await request(server)
-      .post(
-        `/organizations/${created.body.organizationId}/jobs/${submittedJob.body.jobId}/retry`,
-      )
-      .set('Authorization', `Bearer ${loggedIn.body.token}`);
-    expect(retriedJob.status).toBe(200);
-    expect(retriedJob.body).toMatchObject({
-      jobId: submittedJob.body.jobId,
-      status: 'queued',
-      attempts: 1,
-      finishedAt: null,
-    });
-
-    const restartedJob = await request(server)
-      .post(
-        `/organizations/${created.body.organizationId}/jobs/${submittedJob.body.jobId}/start`,
-      )
-      .set('Authorization', `Bearer ${loggedIn.body.token}`);
-    expect(restartedJob.status).toBe(200);
-    expect(restartedJob.body.attempts).toBe(2);
-
-    const completedJob = await request(server)
-      .post(
-        `/organizations/${created.body.organizationId}/jobs/${submittedJob.body.jobId}/complete`,
-      )
-      .set('Authorization', `Bearer ${loggedIn.body.token}`);
-    expect(completedJob.status).toBe(200);
-    expect(completedJob.body).toMatchObject({
-      jobId: submittedJob.body.jobId,
-      status: 'succeeded',
-      attempts: 2,
-      finishedAt: expect.any(String),
-    });
-
-    const cancelableJob = await request(server)
-      .post(`/organizations/${created.body.organizationId}/jobs`)
-      .set('Authorization', `Bearer ${loggedIn.body.token}`)
-      .send({ kind: 'document.cleanup' });
-    expect(cancelableJob.status).toBe(201);
-
-    const canceledJob = await request(server)
-      .post(
-        `/organizations/${created.body.organizationId}/jobs/${cancelableJob.body.jobId}/cancel`,
-      )
-      .set('Authorization', `Bearer ${loggedIn.body.token}`);
-    expect(canceledJob.status).toBe(200);
-    expect(canceledJob.body).toMatchObject({
-      jobId: cancelableJob.body.jobId,
-      status: 'canceled',
-      finishedAt: expect.any(String),
-    });
-
-    const jobs = await request(server)
-      .get(`/organizations/${created.body.organizationId}/jobs`)
-      .set('Authorization', `Bearer ${loggedIn.body.token}`);
-    expect(jobs.status).toBe(200);
-    expect(jobs.body).toHaveLength(2);
-
     const ownerRoleChange = await request(server)
       .patch(
         `/organizations/${created.body.organizationId}/memberships/${created.body.ownerMembershipId}/role`,
@@ -237,49 +73,39 @@ integration('Organization runtime integration', () => {
     const targetRegistered = await request(server)
       .post('/identity/register')
       .send({ email: targetEmail, password: 'correct horse battery staple' });
-    expect(targetRegistered.status).toBe(201);
+    expect(targetRegistered.status).toBe(202);
 
-    const targetChallenge = await request(server)
-      .post('/identity/verification-challenges')
-      .send({ identityId: targetRegistered.body.identityId });
-    expect(targetChallenge.status).toBe(201);
+    const targetChallenge = await request(server).get(mailbox(targetEmail));
+    expect(targetChallenge.status).toBe(200);
 
     const targetVerified = await request(server)
       .post('/identity/verify')
-      .send({
-        challengeId: targetChallenge.body.challengeId,
-        token: targetChallenge.body.token,
-      });
+      .send(verificationFrom(targetChallenge.body[0]));
     expect(targetVerified.status).toBe(201);
 
     const invitedEmail = `organization-invited-${randomUUID()}@example.com`;
     const invitedRegistered = await request(server)
       .post('/identity/register')
       .send({ email: invitedEmail, password: 'correct horse battery staple' });
-    expect(invitedRegistered.status).toBe(201);
+    expect(invitedRegistered.status).toBe(202);
 
-    const invitedChallenge = await request(server)
-      .post('/identity/verification-challenges')
-      .send({ identityId: invitedRegistered.body.identityId });
-    expect(invitedChallenge.status).toBe(201);
+    const invitedChallenge = await request(server).get(mailbox(invitedEmail));
+    expect(invitedChallenge.status).toBe(200);
 
     const invitedVerified = await request(server)
       .post('/identity/verify')
-      .send({
-        challengeId: invitedChallenge.body.challengeId,
-        token: invitedChallenge.body.token,
-      });
+      .send(verificationFrom(invitedChallenge.body[0]));
     expect(invitedVerified.status).toBe(201);
 
     const invitation = await request(server)
       .post(`/organizations/${created.body.organizationId}/invitations`)
       .set('Authorization', `Bearer ${loggedIn.body.token}`)
-      .send({ identityId: invitedRegistered.body.identityId, role: 'member' });
+      .send({ identityId: invitedVerified.body.identityId, role: 'member' });
 
     expect(invitation.status).toBe(201);
     expect(invitation.body).toEqual({
       invitationId: expect.any(String),
-      identityId: invitedRegistered.body.identityId,
+      identityId: invitedVerified.body.identityId,
       role: 'member',
       status: 'pending',
       expiresAt: expect.any(String),
@@ -304,7 +130,7 @@ integration('Organization runtime integration', () => {
       invitationId: invitation.body.invitationId,
       membershipId: expect.any(String),
       organizationId: created.body.organizationId,
-      identityId: invitedRegistered.body.identityId,
+      identityId: invitedVerified.body.identityId,
       role: 'member',
     });
 
@@ -329,25 +155,20 @@ integration('Organization runtime integration', () => {
     const revokedInviteRegistered = await request(server)
       .post('/identity/register')
       .send({ email: revokedInviteEmail, password: 'correct horse battery staple' });
-    expect(revokedInviteRegistered.status).toBe(201);
+    expect(revokedInviteRegistered.status).toBe(202);
 
-    const revokedInviteChallenge = await request(server)
-      .post('/identity/verification-challenges')
-      .send({ identityId: revokedInviteRegistered.body.identityId });
-    expect(revokedInviteChallenge.status).toBe(201);
+    const revokedInviteChallenge = await request(server).get(mailbox(revokedInviteEmail));
+    expect(revokedInviteChallenge.status).toBe(200);
 
     const revokedInviteVerified = await request(server)
       .post('/identity/verify')
-      .send({
-        challengeId: revokedInviteChallenge.body.challengeId,
-        token: revokedInviteChallenge.body.token,
-      });
+      .send(verificationFrom(revokedInviteChallenge.body[0]));
     expect(revokedInviteVerified.status).toBe(201);
 
     const pendingInvitation = await request(server)
       .post(`/organizations/${created.body.organizationId}/invitations`)
       .set('Authorization', `Bearer ${loggedIn.body.token}`)
-      .send({ identityId: revokedInviteRegistered.body.identityId, role: 'member' });
+      .send({ identityId: revokedInviteVerified.body.identityId, role: 'member' });
     expect(pendingInvitation.status).toBe(201);
 
     const revokedInvitation = await request(server)
@@ -365,12 +186,12 @@ integration('Organization runtime integration', () => {
     const added = await request(server)
       .post(`/organizations/${created.body.organizationId}/memberships`)
       .set('Authorization', `Bearer ${loggedIn.body.token}`)
-      .send({ identityId: targetRegistered.body.identityId, role: 'member' });
+      .send({ identityId: targetVerified.body.identityId, role: 'member' });
 
     expect(added.status).toBe(201);
     expect(added.body).toEqual({
       membershipId: expect.any(String),
-      identityId: targetRegistered.body.identityId,
+      identityId: targetVerified.body.identityId,
       role: 'member',
     });
 
@@ -456,7 +277,22 @@ integration('Organization runtime integration', () => {
     expect(targetOrganizationsAfterRevocation.status).toBe(200);
     expect(targetOrganizationsAfterRevocation.body).toEqual([]);
 
-    const audit = await request(server).get('/audit/entries');
+    const organizationEventTypes = new Set([
+      'organization.created.v1',
+      'organization.membership.added.v1',
+      'organization.invitation.created.v1',
+      'organization.invitation.accepted.v1',
+      'organization.invitation.revoked.v1',
+      'organization.membership.role.changed.v1',
+      'organization.membership.revoked.v1',
+    ]);
+    const audit = await eventually(
+      () => request(server).get('/audit/entries'),
+      (response) =>
+        response.body.filter((entry: { eventType?: string }) =>
+          organizationEventTypes.has(entry.eventType ?? ''),
+        ).length >= 10,
+    );
     expect(audit.status).toBe(200);
 
     const organizationEvents = audit.body.filter(
@@ -466,19 +302,11 @@ integration('Organization runtime integration', () => {
       entry.eventType === 'organization.invitation.created.v1' ||
       entry.eventType === 'organization.invitation.accepted.v1' ||
       entry.eventType === 'organization.invitation.revoked.v1' ||
-      entry.eventType === 'document.created.v1' ||
-      entry.eventType === 'document.archived.v1' ||
-      entry.eventType === 'job.submitted.v1' ||
-      entry.eventType === 'job.started.v1' ||
-      entry.eventType === 'job.failed.v1' ||
-      entry.eventType === 'job.retried.v1' ||
-      entry.eventType === 'job.completed.v1' ||
-      entry.eventType === 'job.canceled.v1' ||
       entry.eventType === 'organization.membership.role.changed.v1' ||
       entry.eventType === 'organization.membership.revoked.v1',
     );
 
-    expect(organizationEvents).toHaveLength(20);
+    expect(organizationEvents).toHaveLength(10);
     expect(organizationEvents.filter(
       (entry: { eventType: string }) => entry.eventType === 'organization.created.v1',
     )).toHaveLength(1);
@@ -495,38 +323,24 @@ integration('Organization runtime integration', () => {
       (entry: { eventType: string }) => entry.eventType === 'organization.invitation.revoked.v1',
     )).toHaveLength(1);
     expect(organizationEvents.filter(
-      (entry: { eventType: string }) => entry.eventType === 'document.created.v1',
-    )).toHaveLength(1);
-    expect(organizationEvents.filter(
-      (entry: { eventType: string }) => entry.eventType === 'document.archived.v1',
-    )).toHaveLength(1);
-    expect(organizationEvents.filter(
-      (entry: { eventType: string }) => entry.eventType === 'job.submitted.v1',
-    )).toHaveLength(2);
-    expect(organizationEvents.filter(
-      (entry: { eventType: string }) => entry.eventType === 'job.started.v1',
-    )).toHaveLength(2);
-    expect(organizationEvents.filter(
-      (entry: { eventType: string }) => entry.eventType === 'job.failed.v1',
-    )).toHaveLength(1);
-    expect(organizationEvents.filter(
-      (entry: { eventType: string }) => entry.eventType === 'job.retried.v1',
-    )).toHaveLength(1);
-    expect(organizationEvents.filter(
-      (entry: { eventType: string }) => entry.eventType === 'job.completed.v1',
-    )).toHaveLength(1);
-    expect(organizationEvents.filter(
-      (entry: { eventType: string }) => entry.eventType === 'job.canceled.v1',
-    )).toHaveLength(1);
-    expect(organizationEvents.filter(
       (entry: { eventType: string }) => entry.eventType === 'organization.membership.role.changed.v1',
     )).toHaveLength(1);
     expect(organizationEvents.filter(
       (entry: { eventType: string }) => entry.eventType === 'organization.membership.revoked.v1',
     )).toHaveLength(1);
-    expect(organizationEvents.every(
-      (entry: { subject?: { kind?: string; id?: string } }) =>
-        entry.subject?.kind === 'identity',
-    )).toBe(true);
+    // Each event is audited under the aggregate its module names, never under
+    // the identity that acted.
+    const expectedKind = (eventType: string) =>
+      eventType.startsWith('organization.membership.')
+        ? 'membership'
+        : eventType.startsWith('organization.invitation.')
+          ? 'invitation'
+          : eventType.split('.')[0];
+    expect(
+      organizationEvents.filter(
+        (entry: { eventType: string; subject?: { kind?: string } }) =>
+          entry.subject?.kind !== expectedKind(entry.eventType),
+      ),
+    ).toEqual([]);
   });
 });

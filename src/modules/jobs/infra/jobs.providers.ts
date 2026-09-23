@@ -12,6 +12,7 @@ import {
 } from '../../../platform/runtime/index.js';
 import {
   CancelJob,
+  ExpireStaleJobs,
   CompleteJob,
   FailJob,
   ListJobs,
@@ -27,12 +28,14 @@ import {
   InMemoryJobReader,
   InMemoryJobStore,
   InMemoryJobWriter,
-  OrganizationAccessReaderAdapter,
 } from './in-memory/index.js';
 import { PostgresJobReader, PostgresJobWriter } from './postgres/index.js';
 
+import { JOBS_REQUIRES } from './requires.js';
+import { JOB_EXPIRY_TIMEOUT, JobExpiry, runningTimeoutMs } from './job-expiry.js';
+
 const PORTS = {
-  access: Symbol('jobs.organizationAccessReader'),
+  access: JOBS_REQUIRES.organizationAccess,
   reader: Symbol('jobs.reader'),
   writer: Symbol('jobs.writer'),
 } as const;
@@ -52,11 +55,6 @@ export const jobsProviders: Provider[] = [
   InMemoryJobStore,
   InMemoryJobReader,
   InMemoryJobWriter,
-  OrganizationAccessReaderAdapter,
-  {
-    provide: PORTS.access,
-    useExisting: OrganizationAccessReaderAdapter,
-  },
   {
     provide: PORTS.reader,
     useFactory: (
@@ -164,4 +162,12 @@ export const jobsProviders: Provider[] = [
     ) => new SubmitWorkflowJob({ clock, ids, jobs, writer }),
     inject: [SystemClock, V7, PORTS.reader, PORTS.writer],
   },
+  {
+    provide: ExpireStaleJobs,
+    useFactory: (clock: SystemClock, ids: V7, jobs: JobReader, writer: JobWriter) =>
+      new ExpireStaleJobs({ clock, ids, jobs, writer }),
+    inject: [SystemClock, V7, PORTS.reader, PORTS.writer],
+  },
+  { provide: JOB_EXPIRY_TIMEOUT, useFactory: runningTimeoutMs },
+  JobExpiry,
 ];

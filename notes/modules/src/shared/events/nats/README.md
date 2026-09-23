@@ -8,8 +8,7 @@ The NATS JetStream adapter is the remote transport option behind the same
 - Stream and durable-consumer provisioning is explicit and verifies the
   important configuration rather than silently accepting drift.
 - Subject construction is configured at the adapter boundary. The reusable
-  default is `n2f.events.`; legacy deployments can explicitly use
-  `signals.events.` during rollback.
+  default is `n2f.events.`; a deployment can configure its own prefix.
 - Publish uses the event ID as the NATS message ID. A duplicate acknowledgement
   is verified against the stored event bytes before it is treated as durable.
 - `transfer` moves one received event to another `Publisher` and acknowledges

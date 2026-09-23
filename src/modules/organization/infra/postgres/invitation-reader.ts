@@ -15,6 +15,7 @@ type InvitationRow = {
   expires_at: Date;
   accepted_at: Date | null;
   revoked_at: Date | null;
+  version: number;
 };
 
 function id(value: string): Result<ID, Failure> {
@@ -42,6 +43,7 @@ function restore(row: InvitationRow): Result<Invitation, Failure> {
     expiresAt: row.expires_at,
     acceptedAt: row.accepted_at,
     revokedAt: row.revoked_at,
+    version: row.version,
   });
 }
 
@@ -55,7 +57,7 @@ export class PostgresInvitationReader implements InvitationReader {
     return this.database.transaction(async (transaction) => {
       try {
         const result = await transaction.query<InvitationRow>(
-          `SELECT id,organization_id,identity_id,role,status,created_at,updated_at,expires_at,accepted_at,revoked_at
+          `SELECT id,organization_id,identity_id,role,status,created_at,updated_at,expires_at,accepted_at,revoked_at,version
              FROM public.n2f_organization_invitations
             WHERE id=$1::uuid`,
           [invitationId],
@@ -76,7 +78,7 @@ export class PostgresInvitationReader implements InvitationReader {
     return this.database.transaction(async (transaction) => {
       try {
         const result = await transaction.query<InvitationRow>(
-          `SELECT id,organization_id,identity_id,role,status,created_at,updated_at,expires_at,accepted_at,revoked_at
+          `SELECT id,organization_id,identity_id,role,status,created_at,updated_at,expires_at,accepted_at,revoked_at,version
              FROM public.n2f_organization_invitations
             WHERE organization_id=$1::uuid AND identity_id=$2::uuid AND status='pending'
             ORDER BY created_at DESC LIMIT 1`,

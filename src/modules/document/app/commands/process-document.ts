@@ -24,6 +24,10 @@ import {
 export type ProcessDocumentCommand = Readonly<{
   organizationId: ID;
   documentId: ID;
+  /** The processing run: begun by `begin`, reported on by every outcome. */
+  processingRun: ID;
+  /** The run's attempt an outcome reports; ignored by `begin`. */
+  attempt?: number;
   failureCode?: unknown;
   work: WorkContext;
   signal?: AbortSignal;
@@ -43,7 +47,7 @@ export type ProcessDocumentResult = Readonly<{
   processingFailureCode: string | null;
 }>;
 
-type Action = 'begin' | 'complete' | 'fail';
+type Action = 'begin' | 'retry' | 'complete' | 'fail';
 
 function nextId(ids: IDGenerator): Result<ID, DocumentApplicationFailure> {
   const generated = ids.newId();
@@ -56,16 +60,15 @@ function transition(
   document: Document,
   action: Action,
   at: Date,
-  failureCode: unknown,
+  command: ProcessDocumentCommand,
 ): Result<Document, DocumentFailure> {
-  switch (action) {
-    case 'begin':
-      return document.beginProcessing(at);
-    case 'complete':
-      return document.markProcessed(at);
-    case 'fail':
-      return document.markProcessingFailed(at, failureCode);
-  }
+  if (action === 'begin') return document.beginProcessing(at, command.processingRun);
+  return document.applyProcessingOutcome(at, {
+    run: command.processingRun,
+    attempt: command.attempt ?? 0,
+    result: action === 'retry' ? 'retrying' : action === 'complete' ? 'succeeded' : 'failed',
+    failureCode: command.failureCode,
+  });
 }
 
 export class ProcessDocument {
@@ -104,16 +107,11 @@ export class ProcessDocument {
     }
 
     const at = this.dependencies.clock.now();
-    const changed = transition(
-      current.value,
-      this.action,
-      at,
-      command.failureCode,
-    );
+    const changed = transition(current.value, this.action, at, command);
     if (!changed.ok) return changed;
 
-    // Expected redeliveries are successful no-ops. This is important when the
-    // same NATS message is delivered again after a consumer restart.
+    // Redelivered and stale outcomes are successful no-ops: delivery is at
+    // least once and not strictly ordered.
     if (changed.value === current.value) {
       return ok(resultOf(changed.value));
     }
@@ -130,7 +128,11 @@ export class ProcessDocument {
         document_id: changed.value.id,
         status: changed.value.status,
         processing_failure_code: changed.value.processingFailureCode,
+        processing_run: changed.value.processingRun,
+        processing_attempt: changed.value.processingAttempt,
       },
+      { kind: 'document', id: changed.value.id },
+      changed.value.organizationId,
     );
     if (!event.ok) return err(dependencyFailure(event.error, 'event.create'));
 
@@ -162,6 +164,18 @@ export class BeginDocumentProcessing extends ProcessDocument {
       dependencies,
       'begin',
       'document.processing.start',
+      DOCUMENT_EVENT_TYPES.processingStarted,
+    );
+  }
+}
+
+/** Resume a run whose failed attempt is being retried. */
+export class RetryDocumentProcessing extends ProcessDocument {
+  constructor(dependencies: ProcessDocumentDependencies) {
+    super(
+      dependencies,
+      'retry',
+      'document.processing.retry',
       DOCUMENT_EVENT_TYPES.processingStarted,
     );
   }

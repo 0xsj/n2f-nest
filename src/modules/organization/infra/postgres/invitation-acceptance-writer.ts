@@ -1,7 +1,16 @@
 import { err, type Failure, type Result } from '../../../../shared/errors/index.js';
 import { assertEventWork } from '../../../../shared/events/index.js';
 import { enqueue } from '../../../../shared/events/postgres/index.js';
-import { map, type TransactionDatabase } from '../../../../shared/postgres/index.js';
+import {
+  map,
+  violatedUnique,
+  type TransactionDatabase,
+} from '../../../../shared/postgres/index.js';
+import {
+  CONSTRAINTS,
+  acceptanceConflict,
+  acceptedMembershipExists,
+} from '../failures.js';
 import type {
   InvitationAcceptanceCommit,
   InvitationAcceptanceWriter,
@@ -18,19 +27,15 @@ export class PostgresInvitationAcceptanceWriter implements InvitationAcceptanceW
       }
 
       try {
+        // The pending guard keeps acceptance terminal; the version guard also
+        // refuses an acceptance derived from a superseded read.
         const accepted = await transaction.query(
           `UPDATE public.n2f_organization_invitations
-              SET status='accepted',updated_at=$2,accepted_at=$2
-            WHERE id=$1::uuid AND status='pending'`,
-          [input.invitation.id, input.invitation.updatedAt],
+              SET status='accepted',updated_at=$2,accepted_at=$2,version=version+1
+            WHERE id=$1::uuid AND status='pending' AND version=$3`,
+          [input.invitation.id, input.invitation.updatedAt, input.invitation.version],
         );
-        if (accepted.rowCount !== 1) {
-          return err({
-            kind: 'conflict',
-            message: 'invitation is no longer pending',
-            type: 'organization.invitation.acceptance_conflict',
-          });
-        }
+        if (accepted.rowCount !== 1) return err(acceptanceConflict());
 
         await transaction.query(
           `INSERT INTO public.n2f_organization_memberships
@@ -51,7 +56,13 @@ export class PostgresInvitationAcceptanceWriter implements InvitationAcceptanceW
         }
         return { ok: true, value: undefined };
       } catch (cause) {
-        return err(map(cause));
+        const constraint = violatedUnique(cause);
+        return err(
+          constraint === CONSTRAINTS.membershipPkey ||
+            constraint === CONSTRAINTS.membershipIdentity
+            ? acceptedMembershipExists()
+            : map(cause),
+        );
       }
     }, input.signal);
   }

@@ -24,7 +24,9 @@ export type CredentialFailureType =
   | 'credential.invalid_state'
   | 'credential.non_monotonic_time'
   | 'credential.invalid_revocation_time'
-  | 'credential.already_revoked';
+  | 'credential.already_revoked'
+  | 'credential.invalid_change_time'
+  | 'credential.revoked';
 
 export type CredentialFailure = TypedFailure<'invalid', CredentialFailureType>;
 
@@ -263,5 +265,34 @@ export class Credential {
         revokedAt: copyDate(revokedAt),
       }),
     );
+  }
+
+  /**
+   * This credential with a new secret set at `at`. The secret itself is not
+   * domain state; `updatedAt` records the change and moves strictly forward,
+   * so storage can use it to detect a concurrent change (a login that checked
+   * the previous password, or another reset).
+   */
+  changeSecret(at: Date): Result<Credential, CredentialFailure> {
+    if (!validDate(at)) {
+      return err(
+        invalid('credential change time must be valid', 'credential.invalid_change_time'),
+      );
+    }
+
+    if (at.getTime() <= this.state.updatedAt.getTime()) {
+      return err(
+        invalid(
+          'credential transition time cannot move backwards',
+          'credential.non_monotonic_time',
+        ),
+      );
+    }
+
+    if (this.status === 'revoked') {
+      return err(invalid('credential is revoked', 'credential.revoked'));
+    }
+
+    return ok(new Credential({ ...this.state, updatedAt: copyDate(at) }));
   }
 }

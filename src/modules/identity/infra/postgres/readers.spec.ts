@@ -92,6 +92,7 @@ function identityRow() {
     created_at: issuedAt,
     updated_at: issuedAt,
     verified_at: null,
+    version: 1,
   };
 }
 
@@ -120,6 +121,7 @@ function challengeRow() {
     expires_at: expiresAt,
     consumed_at: null,
     token_digest: 'digest',
+    version: 1,
   };
 }
 

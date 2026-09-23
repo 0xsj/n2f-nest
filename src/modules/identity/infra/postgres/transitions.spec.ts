@@ -158,6 +158,7 @@ describe('PostgreSQL session adapters', () => {
       session: session(),
       tokenDigest: digestToken(new SecretString('session-token')),
       event: event('identity.session.created.v1'),
+      evicted: [],
       work: workContext(),
     });
 
@@ -175,7 +176,9 @@ describe('PostgreSQL session adapters', () => {
       status: 'active',
       created_at: createdAt,
       expires_at: expiresAt,
+      last_seen_at: createdAt,
       revoked_at: null,
+      version: 1,
     };
     database.client.query = async (text: string) => {
       database.client.queries.push(text);

@@ -12,7 +12,12 @@ import type {
   CurrentSessionReader,
   IdentityView,
   IdentityViewReader,
+  SessionActivityWriter,
 } from '../ports/index.js';
+
+const MINUTE = 60 * 1000;
+const policy = { idleTimeoutMs: 30 * MINUTE, activityIntervalMs: MINUTE };
+const noActivity: SessionActivityWriter = { record: async () => ok(undefined) };
 
 const parsedIds = [
   '00000000-0000-7000-8000-000000000001',
@@ -54,6 +59,8 @@ function setup(
     status: 'active',
     verifiedAt: new Date('2026-09-19T00:01:00.000Z'),
   },
+  at: Date = now,
+  activity: SessionActivityWriter = noActivity,
 ) {
   let queriedIdentityId: ID | undefined;
 
@@ -70,9 +77,11 @@ function setup(
   };
 
   const useCase = new GetCurrentIdentity({
-    clock: new FakeClock(now),
+    clock: new FakeClock(at),
     sessions,
     identities,
+    policy,
+    activity,
   });
 
   return { getQueriedIdentityId: () => queriedIdentityId, useCase };
@@ -158,6 +167,8 @@ describe('GetCurrentIdentity', () => {
       identities: {
         findById: async () => ok(null),
       },
+      policy,
+      activity: noActivity,
     });
 
     const result = await useCase.execute(query());
@@ -168,5 +179,66 @@ describe('GetCurrentIdentity', () => {
 
     expect(result.error.kind).toBe('unavailable');
     expect(result.error.type).toBe('identity.session_reader_unavailable');
+  });
+});
+
+describe('GetCurrentIdentity session activity', () => {
+  const later = (minutes: number) => new Date(now.getTime() + minutes * MINUTE);
+
+  function recorder() {
+    const recorded: Array<{ sessionId: ID; at: Date }> = [];
+    const activity: SessionActivityWriter = {
+      record: async (sessionId, at) => {
+        recorded.push({ sessionId, at });
+        return ok(undefined);
+      },
+    };
+    return { recorded, activity };
+  }
+
+  it('refuses a session idle for the timeout as expired', async () => {
+    const { useCase } = setup(activeSession(), undefined, later(30));
+
+    const result = await useCase.execute(query());
+
+    expect(result).toMatchObject({ ok: false, error: { type: 'session.expired' } });
+  });
+
+  it('records use once the activity interval has passed', async () => {
+    const { recorded, activity } = recorder();
+    const { useCase } = setup(activeSession(), undefined, later(29), activity);
+
+    expect((await useCase.execute(query())).ok).toBe(true);
+    expect(recorded).toEqual([{ sessionId: validIds[1], at: later(29) }]);
+  });
+
+  it('does not record use within the activity interval', async () => {
+    const { recorded, activity } = recorder();
+    const { useCase } = setup(activeSession(), undefined, new Date(now.getTime() + MINUTE - 1), activity);
+
+    expect((await useCase.execute(query())).ok).toBe(true);
+    expect(recorded).toEqual([]);
+  });
+
+  it('keeps a session alive while it is used', async () => {
+    const used = activeSession().seen(later(25));
+    const { useCase } = setup(used, undefined, later(50));
+
+    expect((await useCase.execute(query())).ok).toBe(true);
+  });
+
+  it('reports a failure to record use instead of letting the session idle out', async () => {
+    const failing: SessionActivityWriter = {
+      record: async () =>
+        err(failure('unavailable', 'database is unavailable', { type: 'postgres.unavailable' })),
+    };
+    const { useCase } = setup(activeSession(), undefined, later(5), failing);
+
+    const result = await useCase.execute(query());
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { kind: 'unavailable', type: 'identity.session_activity_unavailable' },
+    });
   });
 });

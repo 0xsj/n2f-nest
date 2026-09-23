@@ -30,6 +30,7 @@ type IdentityRow = {
   created_at: Date;
   updated_at: Date;
   verified_at: Date | null;
+  version: number;
 };
 
 type CredentialRow = {
@@ -65,6 +66,7 @@ type ChallengeRow = {
   expires_at: Date;
   consumed_at: Date | null;
   token_digest: string;
+  version: number;
 };
 
 function storedId(value: unknown): Result<ID, Failure> {
@@ -98,6 +100,7 @@ function identityFrom(row: IdentityRow): Result<Identity, Failure> {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     verifiedAt: row.verified_at,
+    version: row.version,
   });
 }
 
@@ -133,6 +136,7 @@ function challengeFrom(
     issuedAt: row.issued_at,
     expiresAt: row.expires_at,
     consumedAt: row.consumed_at,
+    version: row.version,
   });
 }
 
@@ -146,7 +150,7 @@ export class PostgresIdentityReader implements IdentityReader {
     return this.database.transaction(async (transaction) => {
       try {
         const result = await transaction.query<IdentityRow>(
-          `SELECT id,status,created_at,updated_at,verified_at
+          `SELECT id,status,created_at,updated_at,verified_at,version
              FROM public.n2f_identity_identities
             WHERE id=$1::uuid`,
           [identityId],
@@ -170,7 +174,7 @@ export class PostgresIdentityViewReader implements IdentityViewReader {
     return this.database.transaction(async (transaction) => {
       try {
         const result = await transaction.query<IdentityRow>(
-          `SELECT id,status,created_at,updated_at,verified_at
+          `SELECT id,status,created_at,updated_at,verified_at,version
              FROM public.n2f_identity_identities
             WHERE id=$1::uuid`,
           [identityId],
@@ -200,11 +204,26 @@ export class PostgresCredentialAuthenticatorReader
     email: CredentialAuthenticationRecord['credential']['email'],
     signal?: AbortSignal,
   ): Promise<Result<CredentialAuthenticationRecord | null, Failure>> {
+    return this.find('c.email=$1', email, signal);
+  }
+
+  findByIdentity(
+    identityId: ID,
+    signal?: AbortSignal,
+  ): Promise<Result<CredentialAuthenticationRecord | null, Failure>> {
+    return this.find('c.identity_id=$1::uuid', identityId, signal);
+  }
+
+  private find(
+    where: 'c.email=$1' | 'c.identity_id=$1::uuid',
+    value: string,
+    signal?: AbortSignal,
+  ): Promise<Result<CredentialAuthenticationRecord | null, Failure>> {
     return this.database.transaction(async (transaction) => {
       try {
         const result = await transaction.query<CredentialAuthenticationRow>(
           `SELECT
-             i.id,i.status,i.created_at,i.updated_at,i.verified_at,
+             i.id,i.status,i.created_at,i.updated_at,i.verified_at,i.version,
              c.id AS credential_id,
              c.identity_id AS credential_identity_id,
              c.method AS credential_method,
@@ -216,8 +235,8 @@ export class PostgresCredentialAuthenticatorReader
              c.revoked_at AS credential_revoked_at
            FROM public.n2f_identity_credentials c
            JOIN public.n2f_identity_identities i ON i.id=c.identity_id
-          WHERE c.email=$1 AND c.status='active'`,
-          [email],
+          WHERE ${where} AND c.status='active'`,
+          [value],
         );
         const row = result.rows[0];
         if (row === undefined) return ok(null);
@@ -263,7 +282,7 @@ export class PostgresVerificationChallengeReader
       try {
         const result = await transaction.query<ChallengeRow>(
           `SELECT id,identity_id,purpose,status,issued_at,expires_at,
-                  consumed_at,token_digest
+                  consumed_at,token_digest,version
              FROM public.n2f_identity_verification_challenges
             WHERE id=$1::uuid`,
           [challengeId],

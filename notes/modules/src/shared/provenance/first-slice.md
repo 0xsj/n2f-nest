@@ -5,7 +5,7 @@ that the claim is authorized, persisted or successfully completed.
 
 ## Origin
 
-Reviewed and adapted from the previous Signals provenance contract on 2026-09-18.
+Reviewed and adapted from the predecessor product's provenance contract on 2026-09-18.
 The fresh implementation keeps the core transitions and ownership guarantees,
 adds `message` as a first-class origin for NATS-style consumers and reuses the
 shared `WallClock` and `IDGenerator` capabilities.

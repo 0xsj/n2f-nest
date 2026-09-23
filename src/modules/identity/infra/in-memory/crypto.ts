@@ -23,9 +23,20 @@ import type {
   VerificationTokenVerifier,
 } from '../../app/ports/index.js';
 
-const PASSWORD_PREFIX = 'scrypt-v1';
 const PASSWORD_KEY_LENGTH = 32;
 const PASSWORD_SALT_LENGTH = 16;
+
+type ScryptCost = Readonly<{ N: number; r: number; p: number }>;
+
+/**
+ * New hashes use an OWASP-recommended scrypt configuration (N=2^15, r=8,
+ * p=3: 32 MiB per hash, equivalent in strength to N=2^17, r=8, p=1 at a
+ * quarter of the memory). The format records its parameters, so raising them
+ * later needs no new format; `scrypt-v1` hashes (N=2^14, r=8, p=1) still verify.
+ */
+const CURRENT: ScryptCost = Object.freeze({ N: 32768, r: 8, p: 3 });
+const LEGACY_V1: ScryptCost = Object.freeze({ N: 16384, r: 8, p: 1 });
+const MAX_N = 1 << 20;
 
 function cryptoFailure(message: string, cause: unknown): Failure {
   return failure('unavailable', message, {
@@ -34,13 +45,13 @@ function cryptoFailure(message: string, cause: unknown): Failure {
   });
 }
 
-function derivePassword(password: string, salt: Buffer): Promise<Buffer> {
+function derivePassword(password: string, salt: Buffer, cost: ScryptCost): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     scrypt(
       password,
       salt,
       PASSWORD_KEY_LENGTH,
-      { N: 16384, r: 8, p: 1, maxmem: 32 * 1024 * 1024 },
+      { ...cost, maxmem: 256 * cost.N * cost.r },
       (error, derived) => {
         if (error) reject(error);
         else resolve(Buffer.from(derived));
@@ -49,29 +60,60 @@ function derivePassword(password: string, salt: Buffer): Promise<Buffer> {
   });
 }
 
-function parsePasswordHash(value: string):
-  | { readonly salt: Buffer; readonly digest: Buffer }
-  | undefined {
-  const [prefix, saltValue, digestValue] = value.split('$');
-  if (prefix !== PASSWORD_PREFIX || !saltValue || !digestValue) return undefined;
+type ParsedHash = Readonly<{ cost: ScryptCost; salt: Buffer; digest: Buffer }>;
+
+function decode(value: string | undefined): Buffer | undefined {
+  if (!value) return undefined;
   try {
-    const salt = Buffer.from(saltValue, 'base64url');
-    const digest = Buffer.from(digestValue, 'base64url');
-    return salt.length === PASSWORD_SALT_LENGTH && digest.length === PASSWORD_KEY_LENGTH
-      ? { salt, digest }
-      : undefined;
+    return Buffer.from(value, 'base64url');
   } catch {
     return undefined;
   }
 }
 
+function positive(value: string | undefined): number | undefined {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function parsePasswordHash(value: string): ParsedHash | undefined {
+  const parts = value.split('$');
+  let cost: ScryptCost | undefined;
+  let salt: Buffer | undefined;
+  let digest: Buffer | undefined;
+  if (parts[0] === 'scrypt-v1' && parts.length === 3) {
+    cost = LEGACY_V1;
+    salt = decode(parts[1]);
+    digest = decode(parts[2]);
+  } else if (parts[0] === 'scrypt-v2' && parts.length === 6) {
+    const [N, r, p] = [positive(parts[1]), positive(parts[2]), positive(parts[3])];
+    // Refuse a stored cost that would exhaust memory or CPU on verification.
+    if (N && r && p && N <= MAX_N && (N & (N - 1)) === 0 && r <= 32 && p <= 16) {
+      cost = { N, r, p };
+    }
+    salt = decode(parts[4]);
+    digest = decode(parts[5]);
+  }
+  return cost && salt?.length === PASSWORD_SALT_LENGTH && digest?.length === PASSWORD_KEY_LENGTH
+    ? { cost, salt, digest }
+    : undefined;
+}
+
+function format(cost: ScryptCost, salt: Buffer, digest: Buffer): string {
+  return `scrypt-v2$${cost.N}$${cost.r}$${cost.p}$${salt.toString('base64url')}$${digest.toString('base64url')}`;
+}
+
 /** Node-only crypto adapter; the application only sees its narrow ports. */
 export class NodePasswordCodec implements PasswordHasher, PasswordVerifier {
+  #decoy?: Promise<ParsedHash>;
+
+  constructor(private readonly cost: ScryptCost = CURRENT) {}
+
   async hash(password: SecretString): Promise<Result<SecretString, Failure>> {
     try {
       const salt = randomBytes(PASSWORD_SALT_LENGTH);
-      const digest = await derivePassword(password.reveal(), salt);
-      return ok(new Secret(`${PASSWORD_PREFIX}$${salt.toString('base64url')}$${digest.toString('base64url')}`));
+      const digest = await derivePassword(password.reveal(), salt, this.cost);
+      return ok(new Secret(format(this.cost, salt, digest)));
     } catch (cause) {
       return err(cryptoFailure('password hashing is unavailable', cause));
     }
@@ -83,8 +125,28 @@ export class NodePasswordCodec implements PasswordHasher, PasswordVerifier {
   ): Promise<Result<boolean, Failure>> {
     const parsed = parsePasswordHash(passwordHash.reveal());
     if (!parsed) return ok(false);
+    return this.#compare(password, parsed);
+  }
+
+  async verifyDecoy(password: SecretString): Promise<Result<false, Failure>> {
     try {
-      const digest = await derivePassword(password.reveal(), parsed.salt);
+      // A random, never-disclosed hash at the current cost matches no password.
+      this.#decoy ??= (async () => {
+        const salt = randomBytes(PASSWORD_SALT_LENGTH);
+        const digest = await derivePassword(randomBytes(32).toString('base64url'), salt, this.cost);
+        return { cost: this.cost, salt, digest };
+      })();
+      const compared = await this.#compare(password, await this.#decoy);
+      return compared.ok ? ok(false) : compared;
+    } catch (cause) {
+      this.#decoy = undefined;
+      return err(cryptoFailure('password verification is unavailable', cause));
+    }
+  }
+
+  async #compare(password: SecretString, parsed: ParsedHash): Promise<Result<boolean, Failure>> {
+    try {
+      const digest = await derivePassword(password.reveal(), parsed.salt, parsed.cost);
       return ok(timingSafeEqual(digest, parsed.digest));
     } catch (cause) {
       return err(cryptoFailure('password verification is unavailable', cause));

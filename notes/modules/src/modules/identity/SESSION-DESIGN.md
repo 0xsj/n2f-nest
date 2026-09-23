@@ -216,3 +216,38 @@ ordering.
 - [Shared provenance notes](../../shared/provenance/README.md)
 - [Shared events notes](../../shared/events/README.md)
 - [Shared secret notes](../../shared/secret/README.md)
+
+## Idle expiry, the session cap and pruning (2026-09-23)
+
+The hardening review found sessions valid for 24 hours whatever their use, with
+no bound on how many one identity holds and no deletion of ended rows.
+
+- **Idle expiry.** A Session records `lastSeenAt` (initially its creation).
+  `assertUsable(at, idleTimeoutMs)` refuses a session unused for the idle
+  timeout with the same `session.expired` as absolute expiry, so callers learn
+  nothing extra. `GetCurrentIdentity`, the one place sessions authenticate,
+  records use through `SessionActivityWriter` at most once per
+  `activityIntervalMs` (a quarter of the idle timeout, at most a minute). The
+  write only moves `last_seen_at` forward and leaves the version alone, so it
+  never conflicts with a logout. If use cannot be recorded, the request fails
+  as unavailable rather than letting an active session idle out.
+- **Cap.** A login lists the identity's active sessions
+  (`ActiveSessionReader`) and revokes the oldest still-usable ones beyond
+  `maxActivePerIdentity - 1`, each with `identity.session.revoked.v1`
+  (`reason: session_limit`), in the same transaction as the new session. The
+  revocations are version-checked: a session changed meanwhile fails the login
+  with a stale write. Two concurrent logins may each see room and exceed the
+  cap by one until the next login.
+- **Pruning.** `PruneSessions`, run every ten minutes by `SessionPruning`,
+  deletes sessions revoked or expired more than the retention ago, or unused
+  for longer than retention plus the idle timeout. Their events were already
+  emitted when they ended (or time ended them), so deletion records nothing.
+
+Limits come from `N2F_SESSION_LIFETIME_HOURS`, `N2F_SESSION_IDLE_MINUTES`,
+`N2F_SESSION_MAX_PER_IDENTITY` and `N2F_SESSION_RETENTION_DAYS`
+(`infra/session-settings.ts`); invalid values stop startup. Migration 8
+(`session-activity.sql`) adds `last_seen_at`, backfilled from `created_at`.
+Proven by `session.spec.ts`, `get-current-identity.spec.ts`,
+`authenticate-identity.spec.ts`, `prune-sessions.spec.ts`, the Identity
+adapter contract (both adapters) and `test/session-limits.integration.spec.ts`.
+

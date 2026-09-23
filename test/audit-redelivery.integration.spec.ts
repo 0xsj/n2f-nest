@@ -160,6 +160,7 @@ integration('durable audit redelivery', () => {
         );
         return { ok: true, value: undefined } as const;
       });
+      await broker.value.removeConsumer();
       await broker.value.close();
       await database.close(5000);
     }

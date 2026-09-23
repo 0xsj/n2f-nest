@@ -168,3 +168,33 @@ adapter tests and later integration tests.
 - [Shared provenance notes](../../shared/provenance/README.md)
 - [Shared events notes](../../shared/events/README.md)
 - [Shared secret notes](../../shared/secret/README.md)
+
+## Mailed verification and enumeration-safe sign-up (2026-09-23)
+
+Sign-up used to answer `201 {identityId}` for a new email and `409` for a
+taken one, and a development endpoint returned the raw verification token.
+The first let anyone test which emails have accounts (hardening item S2).
+
+- `SignUp` wraps `RegisterIdentity` and `IssueVerificationChallenge`. A new
+  email gets its identity and a verification link through `IdentityMailer`,
+  and a taken email gets a notice to its owner. Both hash the password before
+  storage decides and return the same result; only failures that do not
+  depend on existing accounts (invalid input, storage down) are reported. A
+  challenge or message that could not be issued does not fail the sign-up,
+  because `ResendVerification` recovers it.
+- `ResendVerification` takes an email, not an identity ID. It mails a fresh
+  link only to an identity still pending verification, and answers alike for
+  every other address.
+- The transport answers both with the same `202` body, no sooner than
+  `N2F_SIGNUP_FLOOR_MS` after the request arrived. The extra work of a new
+  sign-up (a challenge and two events) was measurable without the floor.
+- Mail goes through the platform `Mailer`, which accepts a message and
+  delivers it in the background, so the mail server's latency never shows in a
+  response. The development transport keeps messages for `GET /dev/mail`;
+  production requires SMTP.
+
+Known limit: an unverified identity holds its email. If someone signs up with
+another person's address, that person later receives the "account exists"
+notice but cannot verify or sign in. Expiring unverified identities, or a
+password reset that also verifies, would release the address.
+

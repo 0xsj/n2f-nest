@@ -6,6 +6,11 @@ import {
   type Result,
 } from '../../../shared/errors/index.js';
 import type { ID } from '../../../shared/id/index.js';
+import {
+  UNSAVED,
+  isStoredVersion,
+  type Version,
+} from '../../../shared/version/index.js';
 
 export const SESSION_STATUSES = Object.freeze(['active', 'revoked'] as const);
 
@@ -37,7 +42,10 @@ export type RestoreSessionInput = Readonly<{
   status: SessionStatus;
   createdAt: Date;
   expiresAt: Date;
+  /** Last authenticated use; never before creation. */
+  lastSeenAt: Date;
   revokedAt: Date | null;
+  version: Version;
 }>;
 
 type SessionState = Readonly<{
@@ -46,7 +54,9 @@ type SessionState = Readonly<{
   status: SessionStatus;
   createdAt: Date;
   expiresAt: Date;
+  lastSeenAt: Date;
   revokedAt: Date | null;
+  version: Version;
 }>;
 
 function validDate(value: Date): boolean {
@@ -91,7 +101,9 @@ export class Session {
         status: 'active',
         createdAt,
         expiresAt: copyDate(input.expiresAt),
+        lastSeenAt: copyDate(createdAt),
         revokedAt: null,
+        version: UNSAVED,
       }),
     );
   }
@@ -101,7 +113,10 @@ export class Session {
       !SESSION_STATUSES.includes(input.status) ||
       !validDate(input.createdAt) ||
       !validDate(input.expiresAt) ||
-      (input.revokedAt !== null && !validDate(input.revokedAt))
+      !validDate(input.lastSeenAt) ||
+      input.lastSeenAt.getTime() < input.createdAt.getTime() ||
+      (input.revokedAt !== null && !validDate(input.revokedAt)) ||
+      !isStoredVersion(input.version)
     ) {
       return err(invalid('session state is invalid', 'session.invalid_state'));
     }
@@ -130,7 +145,9 @@ export class Session {
         status: input.status,
         createdAt: copyDate(input.createdAt),
         expiresAt: copyDate(input.expiresAt),
+        lastSeenAt: copyDate(input.lastSeenAt),
         revokedAt: input.revokedAt === null ? null : copyDate(input.revokedAt),
+        version: input.version,
       }),
     );
   }
@@ -155,13 +172,32 @@ export class Session {
     return copyDate(this.state.expiresAt);
   }
 
+  get lastSeenAt(): Date {
+    return copyDate(this.state.lastSeenAt);
+  }
+
   get revokedAt(): Date | null {
     return this.state.revokedAt === null
       ? null
       : copyDate(this.state.revokedAt);
   }
 
-  assertUsable(at: Date): Result<void, SessionFailure> {
+  /** The optimistic-concurrency token this state was loaded at. */
+  get version(): Version {
+    return this.state.version;
+  }
+
+  /** This state as storage holds it after a successful write. */
+  saved(): Session {
+    return new Session({ ...this.state, version: this.state.version + 1 });
+  }
+
+  /**
+   * Whether the session can authenticate at `at`: active, before its absolute
+   * expiry and, when `idleTimeoutMs` is given, used within that long. An idle
+   * session reports `session.expired` like any other expiry.
+   */
+  assertUsable(at: Date, idleTimeoutMs?: number): Result<void, SessionFailure> {
     if (!validDate(at)) {
       return err(
         invalid(
@@ -191,7 +227,31 @@ export class Session {
       );
     }
 
+    if (
+      idleTimeoutMs !== undefined &&
+      at.getTime() - this.state.lastSeenAt.getTime() >= idleTimeoutMs
+    ) {
+      return err(
+        typedFailure(
+          'unauthenticated',
+          'session.expired',
+          'session expired after inactivity',
+        ),
+      );
+    }
+
     return ok(undefined);
+  }
+
+  /**
+   * This session as last used at `at`. Activity only moves forward and does
+   * not change the version: recording use never conflicts with a revocation.
+   */
+  seen(at: Date): Session {
+    if (!validDate(at) || at.getTime() <= this.state.lastSeenAt.getTime()) {
+      return this;
+    }
+    return new Session({ ...this.state, lastSeenAt: copyDate(at) });
   }
 
   revoke(at: Date): Result<Session, SessionFailure> {

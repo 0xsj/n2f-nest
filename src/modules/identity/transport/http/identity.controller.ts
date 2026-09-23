@@ -6,8 +6,11 @@ import {
   HttpException,
   HttpStatus,
   HttpCode,
+  Inject,
+  Logger,
   Post,
 } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import type { Request } from 'express';
 import {
   err,
@@ -21,11 +24,15 @@ import { parse } from '../../../../shared/id/index.js';
 import { SecretString } from '../../../../shared/secret/index.js';
 import { RateLimit } from '../../../../platform/ratelimit/index.js';
 import {
+  RUNTIME_CONFIG,
+  type RuntimeConfig,
+} from '../../../../platform/runtime/index.js';
+import {
   AuthenticateIdentity,
   GetCurrentIdentity,
-  IssueVerificationChallenge,
-  RegisterIdentity,
+  ResendVerification,
   RevokeSession,
+  SignUp,
   VerifyIdentity,
 } from '../../app/index.js';
 import { IdentityHttpWork } from './work.js';
@@ -36,9 +43,16 @@ function clientKey(request: Request): string {
   return request.ip || request.socket.remoteAddress || 'unknown';
 }
 
+/**
+ * Digest caller-supplied body fields so a rate-limit key stays within the
+ * store's length bound whatever the client sends.
+ */
 function bodyKey(request: Request, field: string): string {
   const value = request.body?.[field];
-  return typeof value === 'string' ? value.trim().toLowerCase().slice(0, 254) : 'unknown';
+  if (typeof value !== 'string') return 'unknown';
+  return createHash('sha256')
+    .update(value.trim().toLowerCase())
+    .digest('base64url');
 }
 
 const REGISTER_LIMIT = {
@@ -55,12 +69,51 @@ const LOGIN_LIMIT = {
   key: (request: Request) => `${clientKey(request)}:${bodyKey(request, 'email')}`,
 } as const;
 
+/** Bounds password spraying: one client trying many accounts. */
+const LOGIN_CLIENT_LIMIT = {
+  name: 'identity.login_client',
+  limit: 30,
+  windowMs: 10 * 60 * 1000,
+  key: clientKey,
+} as const;
+
+/**
+ * Bounds distributed guessing against one account. It is deliberately looser
+ * than the per-client limit because anyone can spend it to lock the account.
+ */
+const LOGIN_ACCOUNT_LIMIT = {
+  name: 'identity.login_account',
+  limit: 50,
+  windowMs: 15 * 60 * 1000,
+  key: (request: Request) => bodyKey(request, 'email'),
+} as const;
+
 const CHALLENGE_LIMIT = {
   name: 'identity.verification_challenge',
   limit: 5,
   windowMs: 10 * 60 * 1000,
-  key: (request: Request) => `${clientKey(request)}:${bodyKey(request, 'identityId')}`,
+  key: clientKey,
 } as const;
+
+/** Bounds how often one address is mailed, whoever asks. */
+const CHALLENGE_EMAIL_LIMIT = {
+  name: 'identity.verification_challenge_email',
+  limit: 3,
+  windowMs: 60 * 60 * 1000,
+  key: (request: Request) => bodyKey(request, 'email'),
+} as const;
+
+/** Resolves no sooner than `floorMs` after `startedAt`, hiding how long the work took. */
+async function notBefore(startedAt: number, floorMs: number): Promise<void> {
+  const remaining = startedAt + floorMs - performance.now();
+  if (remaining > 0) await new Promise((resolve) => setTimeout(resolve, remaining));
+}
+
+/** The one answer to sign-up and resend, whatever happened. */
+const ACCEPTED = Object.freeze({
+  status: 'accepted',
+  detail: 'If the address can receive it, a message is on its way.',
+});
 
 const VERIFY_LIMIT = {
   name: 'identity.verify',
@@ -122,46 +175,52 @@ function workOrThrow(
 
 @Controller('identity')
 export class IdentityController {
+  private readonly logger = new Logger('IdentityController');
+
   constructor(
-    private readonly register: RegisterIdentity,
-    private readonly issueChallenge: IssueVerificationChallenge,
+    private readonly signUp: SignUp,
+    private readonly resend: ResendVerification,
     private readonly verify: VerifyIdentity,
     private readonly authenticate: AuthenticateIdentity,
     private readonly current: GetCurrentIdentity,
     private readonly revoke: RevokeSession,
     private readonly workFactory: IdentityHttpWork,
+    @Inject(RUNTIME_CONFIG) private readonly config: RuntimeConfig,
   ) {}
 
+  /**
+   * Answers 202 alike for a new and a taken email (hardening item S2): the
+   * verification link, or a notice to the existing owner, goes by mail.
+   */
   @Post('register')
   @RateLimit(REGISTER_LIMIT)
-  @HttpCode(HttpStatus.CREATED)
+  @HttpCode(HttpStatus.ACCEPTED)
   async registerIdentity(@Body() rawBody: unknown) {
+    const startedAt = performance.now();
     const body = respond(exactStrings(rawBody, ['email', 'password']));
-    const result = await this.register.execute({
+    const result = respond(await this.signUp.execute({
       email: body.email,
       password: new SecretString(body.password),
       work: workOrThrow(this.workFactory, 'identity.register'),
-    });
-    return respond(result);
+    }));
+    if (!result.mailed) this.logger.warn('sign-up accepted but its message was not handed to the mailer');
+    await notBefore(startedAt, this.config.http.signupFloorMs);
+    return ACCEPTED;
   }
 
+  /** Mails a new verification link to an unverified address; 202 alike for any address. */
   @Post('verification-challenges')
-  @RateLimit(CHALLENGE_LIMIT)
-  @HttpCode(HttpStatus.CREATED)
-  async issueVerificationChallenge(@Body() rawBody: unknown) {
-    const body = respond(exactStrings(rawBody, ['identityId']));
-    const identityId = respond(parse(body.identityId));
-    const result = await this.issueChallenge.execute({
-      identityId,
+  @RateLimit(CHALLENGE_LIMIT, CHALLENGE_EMAIL_LIMIT)
+  @HttpCode(HttpStatus.ACCEPTED)
+  async resendVerification(@Body() rawBody: unknown) {
+    const startedAt = performance.now();
+    const body = respond(exactStrings(rawBody, ['email']));
+    respond(await this.resend.execute({
+      email: body.email,
       work: workOrThrow(this.workFactory, 'identity.verification-challenge.issue'),
-    });
-    const value = respond(result);
-    return {
-      identityId: value.identityId,
-      challengeId: value.challengeId,
-      token: value.token.reveal(),
-      expiresAt: value.expiresAt.toISOString(),
-    };
+    }));
+    await notBefore(startedAt, this.config.http.signupFloorMs);
+    return ACCEPTED;
   }
 
   @Post('verify')
@@ -177,7 +236,7 @@ export class IdentityController {
   }
 
   @Post('login')
-  @RateLimit(LOGIN_LIMIT)
+  @RateLimit(LOGIN_LIMIT, LOGIN_CLIENT_LIMIT, LOGIN_ACCOUNT_LIMIT)
   async login(@Body() rawBody: unknown) {
     const body = respond(exactStrings(rawBody, ['email', 'password']));
     const value = respond(await this.authenticate.execute({

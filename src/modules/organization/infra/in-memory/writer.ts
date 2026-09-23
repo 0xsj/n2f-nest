@@ -1,7 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   err,
-  failure,
   ok,
   type Failure,
   type Result,
@@ -12,6 +11,11 @@ import {
   type EventBus,
 } from '../../../../platform/events/event-bus.js';
 import type { CreateOrganizationCommit, OrganizationWriter } from '../../app/index.js';
+import {
+  organizationExists,
+  ownerMembershipExists,
+  slugTaken,
+} from '../failures.js';
 import { InMemoryOrganizationStore } from './store.js';
 
 @Injectable()
@@ -30,31 +34,17 @@ export class InMemoryOrganizationWriter implements OrganizationWriter {
     }
 
     if (this.store.organizationById(input.organization.id)) {
-      return err(
-        failure('conflict', 'organization already exists', {
-          type: 'organization.already_exists',
-        }),
-      );
+      return err(organizationExists());
     }
-
     if (this.store.organizationBySlug(input.organization.slug)) {
-      return err(
-        failure('conflict', 'organization slug is already in use', {
-          type: 'organization.slug_taken',
-        }),
-      );
+      return err(slugTaken());
     }
-
     if (this.store.membershipById(input.ownerMembership.id)) {
-      return err(
-        failure('conflict', 'membership already exists', {
-          type: 'organization.membership_exists',
-        }),
-      );
+      return err(ownerMembershipExists());
     }
 
-    this.store.addOrganization(input.organization);
-    this.store.addMembership(input.ownerMembership);
+    this.store.addOrganization(input.organization.saved());
+    this.store.addMembership(input.ownerMembership.saved());
 
     for (const event of input.events) {
       const published = await this.events.publish(event, input.signal);

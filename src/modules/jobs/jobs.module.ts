@@ -1,7 +1,13 @@
-import { Injectable, Logger, Module, type OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  Module,
+  type DynamicModule,
+  type ModuleMetadata,
+  type OnModuleInit,
+} from '@nestjs/common';
 import { PlatformEventsModule } from '../../platform/events/events.module.js';
 import { PlatformHttpModule } from '../../platform/http/http.module.js';
-import { OrganizationModule } from '../organization/organization.module.js';
 import { SubmitWorkflowJob } from './app/index.js';
 import { jobsProviders } from './infra/jobs.providers.js';
 import { JobsController, JobsHttpWork } from './transport/http/index.js';
@@ -15,10 +21,23 @@ class JobsModuleStartup implements OnModuleInit {
   }
 }
 
-@Module({
-  imports: [OrganizationModule, PlatformEventsModule, PlatformHttpModule],
-  controllers: [JobsController],
-  providers: [JobsModuleStartup, JobsHttpWork, ...jobsProviders],
-  exports: [SubmitWorkflowJob],
-})
-export class JobsModule {}
+export type JobsModuleOptions = Readonly<{
+  /**
+   * Modules that provide and export every JOBS_REQUIRES token. The
+   * composition root chooses them; this module never names its providers.
+   */
+  requires: NonNullable<ModuleMetadata['imports']>;
+}>;
+
+@Module({})
+export class JobsModule {
+  static register(options: JobsModuleOptions): DynamicModule {
+    return {
+      module: JobsModule,
+      imports: [PlatformEventsModule, PlatformHttpModule, ...options.requires],
+      controllers: [JobsController],
+      providers: [JobsModuleStartup, JobsHttpWork, ...jobsProviders],
+      exports: [SubmitWorkflowJob],
+    };
+  }
+}

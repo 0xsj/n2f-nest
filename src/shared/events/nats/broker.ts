@@ -26,7 +26,23 @@ export type Config = {
   /** Target defaults to n2f.events.; legacy deployments can override it. */
   subjectPrefix?: string;
   consumerDeliverPolicy?: 'all' | 'new';
+  /** How long the stream keeps messages; the oldest are discarded first. */
+  maxAgeMs?: number;
+  /** Stream size bound; the oldest messages are discarded first. */
+  maxBytes?: number;
+  /** Delay before JetStream redelivers a message the sink refused. */
+  nakDelayMs?: number;
 };
+
+const DEFAULT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+/**
+ * JetStream reserves max_bytes from the account's storage, so the default
+ * stays small enough for a single-node development server. Deployments size
+ * it through configuration.
+ */
+const DEFAULT_MAX_BYTES = 64 * 1024 * 1024;
+const DEFAULT_NAK_DELAY_MS = 5000;
+const NANOS_PER_MS = 1_000_000;
 
 const DEFAULT_SUBJECT_PREFIX = 'n2f.events.';
 const SUBJECT_PREFIX_PATTERN = /^[A-Za-z0-9_]{1,40}\.[A-Za-z0-9_]{1,40}\.$/;
@@ -39,11 +55,6 @@ const invalid = () =>
   failure('invalid', 'invalid JetStream configuration', {
     type: 'events.jetstream_config',
   });
-
-function value<T>(result: Result<T, Failure>): T {
-  if (!result.ok) throw new AppError(result.error);
-  return result.value;
-}
 
 function compatible(
   got: Record<string, unknown>,
@@ -109,6 +120,22 @@ export class Broker implements Publisher {
 
   async close(): Promise<void> {
     await this.connection.close();
+  }
+
+  /**
+   * Delete this broker's durable consumer. Tests that provision a uniquely
+   * named consumer call it so JetStream does not accumulate one per run.
+   */
+  removeConsumer(caller?: AbortSignal): Promise<Result<void, Failure>> {
+    return this.operation(async (signal) => {
+      const deleted = await this.api(
+        '$JS.API.CONSUMER.DELETE.' + this.config.stream + '.' + this.config.consumer,
+        {},
+        signal,
+      );
+      const error = deleted.error as Record<string, unknown> | undefined;
+      if (error && error.code !== 404) throw new AppError(unavailable());
+    }, caller);
   }
 
   ping(caller?: AbortSignal): Promise<Result<void, Failure>> {
@@ -196,8 +223,12 @@ export class Broker implements Publisher {
         storage: 'file',
         num_replicas: 1,
         retention: 'limits',
-        discard: 'new',
-        max_bytes: 67108864,
+        // Discard the oldest messages at the size or age bound. Discarding new
+        // messages would reject every publish once the stream filled, halting
+        // event delivery for good.
+        discard: 'old',
+        max_age: (this.config.maxAgeMs ?? DEFAULT_MAX_AGE_MS) * NANOS_PER_MS,
+        max_bytes: this.config.maxBytes ?? DEFAULT_MAX_BYTES,
         max_msg_size: 131072,
         duplicate_window: 120000000000,
       };
@@ -212,6 +243,14 @@ export class Broker implements Publisher {
           stream,
           signal,
         );
+      } else if (!info.error && !compatible(info.config as Record<string, unknown>, stream)) {
+        // Bring an existing stream to the current limits. JetStream refuses
+        // changes to immutable settings, which surfaces below as invalid.
+        info = await this.api(
+          '$JS.API.STREAM.UPDATE.' + this.config.stream,
+          { ...(info.config as Record<string, unknown>), ...stream },
+          signal,
+        );
       }
       if (info.error || !compatible(info.config as Record<string, unknown>, stream)) {
         throw new AppError(info.error ? unavailable() : invalid());
@@ -219,9 +258,13 @@ export class Broker implements Publisher {
       const consumer = {
         durable_name: this.config.consumer,
         ack_policy: 'explicit',
-        ack_wait: 1000000000,
-        max_deliver: 5,
-        max_ack_pending: 1,
+        // A delivery only has to reach the durable inbox before ACK, but
+        // leave room for a slow database rather than redelivering early.
+        ack_wait: 30000 * NANOS_PER_MS,
+        // Unlimited: an undecodable message is terminated explicitly, and any
+        // other failure is retried after a delay until the inbox accepts it.
+        max_deliver: -1,
+        max_ack_pending: 256,
         filter_subject: this.#subject,
         deliver_policy: this.config.consumerDeliverPolicy ?? 'all',
         replay_policy: 'instant',
@@ -234,7 +277,11 @@ export class Broker implements Publisher {
         {},
         signal,
       );
-      if (info.error && (info.error as Record<string, unknown>).code === 404) {
+      if (
+        (info.error && (info.error as Record<string, unknown>).code === 404) ||
+        (!info.error && !compatible(info.config as Record<string, unknown>, consumer))
+      ) {
+        // Creating a durable consumer that exists updates its editable settings.
         info = await this.api(
           '$JS.API.CONSUMER.DURABLE.CREATE.' +
             this.config.stream +
@@ -321,10 +368,29 @@ export class Broker implements Publisher {
       );
       if ([404, 408].includes(message.headers?.code ?? 0)) return false;
       if (!message.reply) throw new AppError(unavailable());
-      const event = value(Envelope.decode(message.data));
-      const receipt = value(await sink.publish(event, signal));
-      if (!receipt.durable || receipt.eventId !== event.id) {
-        throw new AppError(unavailable());
+      const event = Envelope.decode(message.data);
+      if (!event.ok) {
+        // A message that cannot be decoded will never succeed; stop JetStream
+        // redelivering it instead of blocking the consumer.
+        await this.request(message.reply, Buffer.from('+TERM'), signal);
+        throw new AppError(
+          failure('invalid', 'undecodable JetStream message terminated', {
+            type: 'events.undecodable',
+          }),
+        );
+      }
+      const receipt = await sink.publish(event.value, signal);
+      if (!receipt.ok || !receipt.value.durable || receipt.value.eventId !== event.value.id) {
+        await this.request(
+          message.reply,
+          Buffer.from(
+            `-NAK ${JSON.stringify({
+              delay: (this.config.nakDelayMs ?? DEFAULT_NAK_DELAY_MS) * NANOS_PER_MS,
+            })}`,
+          ),
+          signal,
+        );
+        throw new AppError(receipt.ok ? unavailable() : receipt.error);
       }
       await this.request(message.reply, Buffer.from('+ACK'), signal);
       return true;

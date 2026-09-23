@@ -22,7 +22,7 @@ consumer-scoped receipts without changing the domain-facing `Publisher` seam.
   sees `Envelope`, `Publisher` and its own event payload type.
 - The polling and retry intervals are intentionally bounded constants for the
   first slice. Operational tuning can be added without changing the seam.
-- Database integration tests require `SIGNALS_TEST_DATABASE_URL`; unit tests
+- Database integration tests require `N2F_RUN_POSTGRES_INTEGRATION=1` and a disposable `N2F_DATABASE_URL`; unit tests
   exercise validation and the adapter's pure branches without PostgreSQL.
 
 ## Used in

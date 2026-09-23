@@ -7,13 +7,14 @@ export class InMemoryJobStore {
     return this.#jobs.get(id);
   }
 
-  jobBySubject(
+  openJobBySubject(
     organizationId: string,
     kind: string,
     subject: JobSubject,
   ): Job | undefined {
     return [...this.#jobs.values()].find(
       (job) =>
+        job.open &&
         job.organizationId === organizationId &&
         job.kind === kind &&
         job.subject?.type === subject.type &&
@@ -28,6 +29,18 @@ export class InMemoryJobStore {
         const time = left.createdAt.getTime() - right.createdAt.getTime();
         return time === 0 ? left.id.localeCompare(right.id) : time;
       });
+  }
+
+  runningStartedBefore(startedBefore: Date, limit: number): readonly Job[] {
+    return [...this.#jobs.values()]
+      .filter(
+        (job) =>
+          job.status === 'running' &&
+          job.startedAt !== null &&
+          job.startedAt.getTime() < startedBefore.getTime(),
+      )
+      .sort((left, right) => left.startedAt!.getTime() - right.startedAt!.getTime())
+      .slice(0, limit);
   }
 
   add(job: Job): void { this.#jobs.set(job.id, job); }

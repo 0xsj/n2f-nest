@@ -9,7 +9,22 @@ export type HttpRateLimitPolicy = Readonly<RateLimitRule & {
 
 export const RATE_LIMIT_POLICY = Symbol('platform.rateLimit.policy');
 
-/** Attach a reusable transport policy without coupling it to an identity domain. */
-export function RateLimit(policy: HttpRateLimitPolicy): MethodDecorator & ClassDecorator {
-  return SetMetadata(RATE_LIMIT_POLICY, policy);
+/**
+ * Attach reusable transport policies without coupling them to an identity
+ * domain. Every policy must allow the request; they are consumed in order.
+ */
+export function RateLimit(
+  ...policies: [HttpRateLimitPolicy, ...HttpRateLimitPolicy[]]
+): MethodDecorator & ClassDecorator {
+  return SetMetadata(RATE_LIMIT_POLICY, Object.freeze(policies));
+}
+
+/** The client a request comes from, as resolved under the configured proxy trust. */
+export function clientOf(request: Request): string {
+  return request.ip || request.socket.remoteAddress || 'unknown';
+}
+
+/** A policy keyed by client address alone. */
+export function perClient(name: string, limit: number, windowMs: number): HttpRateLimitPolicy {
+  return Object.freeze({ name, limit, windowMs, key: clientOf });
 }

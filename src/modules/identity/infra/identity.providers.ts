@@ -4,6 +4,7 @@ import { V7 } from '../../../shared/id/index.js';
 import type { Database } from '../../../shared/postgres/index.js';
 import { Factory as ProvenanceFactory } from '../../../shared/provenance/index.js';
 import { EVENT_BUS, type EventBus } from '../../../platform/events/event-bus.js';
+import { MAILER, type Mailer } from '../../../platform/mail/index.js';
 import {
   DATABASE,
   requireDatabase,
@@ -16,16 +17,22 @@ import {
   GetIdentity,
   GetCurrentIdentity,
   IssueVerificationChallenge,
+  PruneSessions,
   RegisterIdentity,
+  ResendVerification,
+  SignUp,
   RevokeSession,
   VerifyIdentity,
 } from '../app/index.js';
 import type {
+  ActiveSessionReader,
   CredentialAuthenticatorReader,
   CurrentSessionReader,
   IdentityReader,
   IdentityViewReader,
   RegistrationWriter,
+  SessionActivityWriter,
+  SessionPruner,
   SessionRevocationWriter,
   SessionWriter,
   VerificationChallengeReader,
@@ -36,6 +43,9 @@ import {
   DefaultPasswordPolicy,
   DefaultSessionPolicy,
   DefaultVerificationPolicy,
+  InMemoryActiveSessionReader,
+  InMemorySessionActivityWriter,
+  InMemorySessionPruner,
   InMemoryCredentialAuthenticatorReader,
   InMemoryCurrentSessionReader,
   InMemoryIdentityReader,
@@ -51,8 +61,11 @@ import {
   NodeTokenCodec,
 } from './in-memory/index.js';
 import {
+  PostgresActiveSessionReader,
   PostgresCredentialAuthenticatorReader,
   PostgresCurrentSessionReader,
+  PostgresSessionActivityWriter,
+  PostgresSessionPruner,
   PostgresIdentityReader,
   PostgresIdentityViewReader,
   PostgresRegistrationWriter,
@@ -62,6 +75,9 @@ import {
   PostgresVerificationChallengeWriter,
   PostgresVerificationWriter,
 } from './postgres/index.js';
+import { SESSION_SETTINGS, sessionSettings, type SessionSettings } from './session-settings.js';
+import { SessionPruning } from './session-pruning.js';
+import { PlatformIdentityMailer } from './mail.js';
 
 const PORTS = {
   registrationWriter: Symbol('identity.registrationWriter'),
@@ -73,6 +89,9 @@ const PORTS = {
   sessionWriter: Symbol('identity.sessionWriter'),
   sessionReader: Symbol('identity.sessionReader'),
   sessionRevocationWriter: Symbol('identity.sessionRevocationWriter'),
+  sessionActivityWriter: Symbol('identity.sessionActivityWriter'),
+  activeSessionReader: Symbol('identity.activeSessionReader'),
+  sessionPruner: Symbol('identity.sessionPruner'),
   identityViewReader: Symbol('identity.identityViewReader'),
 } as const;
 
@@ -96,8 +115,49 @@ export const identityProviders: Provider[] = [
   NodePasswordCodec,
   NodeTokenCodec,
   DefaultPasswordPolicy,
-  DefaultSessionPolicy,
+  { provide: SESSION_SETTINGS, useFactory: () => sessionSettings() },
+  {
+    provide: DefaultSessionPolicy,
+    useFactory: (settings: SessionSettings) => new DefaultSessionPolicy(settings),
+    inject: [SESSION_SETTINGS],
+  },
   DefaultVerificationPolicy,
+  {
+    provide: PORTS.sessionActivityWriter,
+    useFactory: (
+      config: RuntimeConfig,
+      database: Database | undefined,
+      store: InMemoryIdentityStore,
+    ) =>
+      usesPostgres(config)
+        ? new PostgresSessionActivityWriter(requireDatabase(database, 'Identity'))
+        : new InMemorySessionActivityWriter(store),
+    inject: [RUNTIME_CONFIG, DATABASE, InMemoryIdentityStore],
+  },
+  {
+    provide: PORTS.activeSessionReader,
+    useFactory: (
+      config: RuntimeConfig,
+      database: Database | undefined,
+      store: InMemoryIdentityStore,
+    ) =>
+      usesPostgres(config)
+        ? new PostgresActiveSessionReader(requireDatabase(database, 'Identity'))
+        : new InMemoryActiveSessionReader(store),
+    inject: [RUNTIME_CONFIG, DATABASE, InMemoryIdentityStore],
+  },
+  {
+    provide: PORTS.sessionPruner,
+    useFactory: (
+      config: RuntimeConfig,
+      database: Database | undefined,
+      store: InMemoryIdentityStore,
+    ) =>
+      usesPostgres(config)
+        ? new PostgresSessionPruner(requireDatabase(database, 'Identity'))
+        : new InMemorySessionPruner(store),
+    inject: [RUNTIME_CONFIG, DATABASE, InMemoryIdentityStore],
+  },
   {
     provide: PORTS.registrationWriter,
     useFactory: (
@@ -261,10 +321,11 @@ export const identityProviders: Provider[] = [
       credentials: CredentialAuthenticatorReader,
       passwords: NodePasswordCodec,
       sessions: DefaultSessionPolicy,
+      active: ActiveSessionReader,
       tokens: NodeTokenCodec,
       writer: SessionWriter,
-    ) => new AuthenticateIdentity({ clock, ids, credentials, passwords, sessions, tokens, writer }),
-    inject: [SystemClock, V7, PORTS.credentialReader, NodePasswordCodec, DefaultSessionPolicy, NodeTokenCodec, PORTS.sessionWriter],
+    ) => new AuthenticateIdentity({ clock, ids, credentials, passwords, sessions, active, tokens, writer }),
+    inject: [SystemClock, V7, PORTS.credentialReader, NodePasswordCodec, DefaultSessionPolicy, PORTS.activeSessionReader, NodeTokenCodec, PORTS.sessionWriter],
   },
   {
     provide: GetCurrentIdentity,
@@ -272,8 +333,10 @@ export const identityProviders: Provider[] = [
       clock: SystemClock,
       sessions: CurrentSessionReader,
       identities: IdentityViewReader,
-    ) => new GetCurrentIdentity({ clock, sessions, identities }),
-    inject: [SystemClock, PORTS.sessionReader, PORTS.identityViewReader],
+      policy: DefaultSessionPolicy,
+      activity: SessionActivityWriter,
+    ) => new GetCurrentIdentity({ clock, sessions, identities, policy, activity }),
+    inject: [SystemClock, PORTS.sessionReader, PORTS.identityViewReader, DefaultSessionPolicy, PORTS.sessionActivityWriter],
   },
   {
     provide: GetIdentity,
@@ -289,5 +352,36 @@ export const identityProviders: Provider[] = [
       writer: SessionRevocationWriter,
     ) => new RevokeSession({ clock, ids, sessions, writer }),
     inject: [SystemClock, V7, PORTS.sessionReader, PORTS.sessionRevocationWriter],
+  },
+  {
+    provide: PruneSessions,
+    useFactory: (clock: SystemClock, policy: DefaultSessionPolicy, pruner: SessionPruner) =>
+      new PruneSessions({ clock, policy, pruner }),
+    inject: [SystemClock, DefaultSessionPolicy, PORTS.sessionPruner],
+  },
+  SessionPruning,
+  {
+    provide: PlatformIdentityMailer,
+    useFactory: (mailer: Mailer, config: RuntimeConfig) =>
+      new PlatformIdentityMailer(mailer, config.mail.appUrl),
+    inject: [MAILER, RUNTIME_CONFIG],
+  },
+  {
+    provide: SignUp,
+    useFactory: (
+      register: RegisterIdentity,
+      challenges: IssueVerificationChallenge,
+      mailer: PlatformIdentityMailer,
+    ) => new SignUp({ register, challenges, mailer }),
+    inject: [RegisterIdentity, IssueVerificationChallenge, PlatformIdentityMailer],
+  },
+  {
+    provide: ResendVerification,
+    useFactory: (
+      credentials: CredentialAuthenticatorReader,
+      challenges: IssueVerificationChallenge,
+      mailer: PlatformIdentityMailer,
+    ) => new ResendVerification({ credentials, challenges, mailer }),
+    inject: [PORTS.credentialReader, IssueVerificationChallenge, PlatformIdentityMailer],
   },
 ];

@@ -130,6 +130,7 @@ export class RegisterIdentity {
         credential_method: credential.value.method,
         status: identity.value.status,
       },
+      { kind: 'identity', id: identity.value.id },
     );
 
     if (!event.ok) {

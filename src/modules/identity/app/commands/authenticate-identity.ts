@@ -13,8 +13,10 @@ import { IDENTITY_EVENT_TYPES } from '../../domain/index.js';
 import type { SecretString } from '../../../../shared/secret/index.js';
 import { normalizeEmail, Session } from '../../domain/index.js';
 import type {
+  ActiveSessionReader,
   CredentialAuthenticatorReader,
   PasswordVerifier,
+  SessionEviction,
   SessionPolicy,
   SessionTokenIssuer,
   SessionWriter,
@@ -45,6 +47,7 @@ export type AuthenticateIdentityDependencies = Readonly<{
   credentials: CredentialAuthenticatorReader;
   passwords: PasswordVerifier;
   sessions: SessionPolicy;
+  active: ActiveSessionReader;
   tokens: SessionTokenIssuer;
   writer: SessionWriter;
 }>;
@@ -87,25 +90,28 @@ export class AuthenticateIdentity {
       return err(dependencyFailure(record.error, 'credential_reader'));
     }
 
-    if (
-      record.value === null ||
-      record.value.identity.status !== 'active' ||
-      record.value.credential.status !== 'active'
-    ) {
-      return err(invalidCredentials());
-    }
-
-    const password = await this.dependencies.passwords.verify(
-      command.password,
-      record.value.passwordHash,
-      command.signal,
-    );
+    // Verify before looking at account state, and verify a decoy when there
+    // is no credential, so every refusal costs the same password work and
+    // response time does not reveal which emails exist or are active.
+    const password =
+      record.value === null
+        ? await this.dependencies.passwords.verifyDecoy(command.password, command.signal)
+        : await this.dependencies.passwords.verify(
+            command.password,
+            record.value.passwordHash,
+            command.signal,
+          );
 
     if (!password.ok) {
       return err(dependencyFailure(password.error, 'password_verifier'));
     }
 
-    if (!password.value) {
+    if (
+      !password.value ||
+      record.value === null ||
+      record.value.identity.status !== 'active' ||
+      record.value.credential.status !== 'active'
+    ) {
       return err(invalidCredentials());
     }
 
@@ -156,17 +162,26 @@ export class AuthenticateIdentity {
         session_id: session.value.id,
         expires_at_ms: session.value.expiresAt.getTime(),
       },
+      { kind: 'identity', id: record.value.identity.id },
     );
 
     if (!event.ok) {
       return err(dependencyFailure(event.error, 'session_created_event'));
     }
 
+    const evicted = await this.evictions(session.value, command);
+
+    if (!evicted.ok) {
+      return evicted;
+    }
+
     const committed = await this.dependencies.writer.commit(
       {
         session: session.value,
+        credential: record.value.credential,
         tokenDigest: token.value.digest,
         event: event.value,
+        evicted: evicted.value,
         work: command.work,
       },
       command.signal,
@@ -182,5 +197,54 @@ export class AuthenticateIdentity {
       token: token.value.token,
       expiresAt: session.value.expiresAt,
     });
+  }
+
+  /**
+   * The sessions this login revokes so the identity keeps at most
+   * `maxActivePerIdentity`: the oldest still-usable ones. Sessions that can no
+   * longer authenticate do not count; pruning removes them. Two concurrent
+   * logins may each see room and briefly exceed the cap by one; the next
+   * login restores it.
+   */
+  private async evictions(
+    created: Session,
+    command: AuthenticateIdentityCommand,
+  ): Promise<Result<SessionEviction[], IdentityApplicationFailure>> {
+    const policy = this.dependencies.sessions;
+    const active = await this.dependencies.active.listActive(created.identityId, command.signal);
+
+    if (!active.ok) {
+      return err(dependencyFailure(active.error, 'active_session_reader'));
+    }
+
+    const at = created.createdAt;
+    const usable = active.value
+      .filter((candidate) => candidate.assertUsable(at, policy.idleTimeoutMs).ok)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    const evictions: SessionEviction[] = [];
+
+    for (const stale of usable.slice(Math.max(0, policy.maxActivePerIdentity - 1))) {
+      const revoked = stale.revoke(at);
+      if (!revoked.ok) return revoked;
+      const eventId = this.dependencies.ids.newId();
+      if (!eventId.ok) return err(idGenerationFailure(eventId.error));
+      const event = Envelope.create(
+        eventId.value,
+        IDENTITY_EVENT_TYPES.sessionRevoked,
+        at.getTime(),
+        command.work,
+        {
+          identity_id: revoked.value.identityId,
+          session_id: revoked.value.id,
+          status: revoked.value.status,
+          reason: 'session_limit',
+        },
+        { kind: 'identity', id: revoked.value.identityId },
+      );
+      if (!event.ok) return err(dependencyFailure(event.error, 'session_revoked_event'));
+      evictions.push({ session: revoked.value, event: event.value });
+    }
+
+    return ok(evictions);
   }
 }

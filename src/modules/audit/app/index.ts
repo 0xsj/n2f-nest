@@ -8,6 +8,8 @@ export {
   ListAuditEntries,
   type AuditEntryView,
   type ListAuditEntriesDependencies,
+  ListOrganizationAuditEntries,
+  type ListOrganizationAuditEntriesQuery,
 } from './queries/index.js';
 export {
   dependencyFailure,
@@ -17,5 +19,8 @@ export {
 export type {
   AuditEntryReader,
   AuditEntryWriter,
+  AuditOrganizationAccess,
+  AuditOrganizationAccessReader,
+  AuditOrganizationRole,
   AuditWriteResult,
 } from './ports/index.js';

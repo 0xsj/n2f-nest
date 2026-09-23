@@ -1,10 +1,13 @@
 export { PlatformRuntimeModule } from './runtime.module.js';
 export {
+  describeConfigFailure,
   runtimeConfigOrThrow,
   loadRuntimeConfig,
   parseRuntimeConfig,
   type RuntimeConfig,
+  type Environment,
   type StorageMode,
+  type TrustProxy,
 } from './config.js';
 export { requireDatabase, usesPostgres } from './storage.js';
 export {

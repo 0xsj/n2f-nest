@@ -1,2 +1,2 @@
-export { migration } from './migration.js';
+export { baselineMigration as rateLimitBaselineMigration } from './migration.js';
 export { PostgresRateLimitStore } from './store.js';

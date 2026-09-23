@@ -7,8 +7,8 @@ reader, writer and envelope failures at the point where it owns the operation
 name. This keeps the bounded contexts independent while still making every
 expected failure exhaustive for the caller.
 
-The Organization module owns the agency, label, artist team or other
-organization that operates Signals. It is separate from Identity: Identity
+The Organization module owns the tenant: the company, team or other
+organization that operates within a product built on this backend. It is separate from Identity: Identity
 answers who can authenticate, while Organization answers which operating
 context that identity belongs to and what role it has there.
 
@@ -82,8 +82,8 @@ aggregate model.
 - `src/modules/organization/app/ports/invitation-reader.ts`
 - `src/modules/organization/app/ports/invitation-writer.ts`
 - `src/modules/organization/app/ports/identity-reference-reader.ts`
-- `src/modules/organization/infra/in-memory/identity-current-actor.ts`
-- `src/modules/organization/infra/in-memory/identity-reference-reader.ts`
+- `src/modules/organization/infra/requires.ts` (tokens the composition root supplies)
+- `src/integration/organization-identity.ts` (the Identity bridges)
 - `src/modules/organization/infra/in-memory/reader.ts`
 - `src/modules/organization/infra/in-memory/writer.ts`
 - `src/modules/organization/infra/in-memory/membership-reader.ts`

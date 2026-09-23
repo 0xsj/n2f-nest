@@ -15,6 +15,7 @@ export {
   CompleteDocumentProcessing,
   FailDocumentProcessing,
   ProcessDocument,
+  RetryDocumentProcessing,
   type ProcessDocumentCommand,
   type ProcessDocumentDependencies,
   type ProcessDocumentResult,

@@ -27,7 +27,7 @@ for integration modules, not domain logic.
   infrastructure, not `src/shared` domain contracts in the architectural
   sense. It remains here because several integrations will need the same
   policy.
-- Loopback integration tests require `SIGNALS_TEST_NETWORK=1`; the default
+- Loopback integration tests require `N2F_TEST_NETWORK=1`; the default
   test run does not assume permission to open local sockets.
 - The client does not retry. Retry ownership requires operation semantics,
   idempotency and backoff, so it belongs in the consuming integration.

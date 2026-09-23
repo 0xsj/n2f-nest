@@ -1,5 +1,3 @@
-export { IdentityCurrentActorReader } from './identity-current-actor.js';
-export { IdentityReferenceReaderAdapter } from './identity-reference-reader.js';
 export { InMemoryOrganizationReader } from './reader.js';
 export { InMemoryMembershipReader } from './membership-reader.js';
 export { InMemoryMembershipWriter } from './membership-writer.js';

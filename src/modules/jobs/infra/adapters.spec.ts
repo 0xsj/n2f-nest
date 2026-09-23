@@ -75,7 +75,7 @@ describe('Jobs in-memory adapter contract', () => {
     const store = new InMemoryJobStore();
     const bus = new InMemoryEventBus();
     let publishedId: ID | undefined;
-    bus.subscribe(async (published) => {
+    bus.subscribe('spec', async (published) => {
       publishedId = published.id;
       return ok(undefined);
     });
@@ -99,7 +99,7 @@ describe('Jobs in-memory adapter contract', () => {
   it('rolls back state when event publication fails', async () => {
     const store = new InMemoryJobStore();
     const bus = new InMemoryEventBus();
-    bus.subscribe(async () =>
+    bus.subscribe('spec', async () =>
       err(failure('unavailable', 'test publisher unavailable', { type: 'test.publisher' })),
     );
     const job = jobFixture();

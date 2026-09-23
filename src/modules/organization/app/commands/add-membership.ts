@@ -156,6 +156,8 @@ export class AddMembership {
         membership_id: membership.value.id,
         role: membership.value.role,
       },
+      { kind: 'membership', id: membership.value.id },
+      membership.value.organizationId,
     );
     if (!event.ok) return err(dependencyFailure(event.error, 'event.create'));
 

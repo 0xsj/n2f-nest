@@ -1,12 +1,22 @@
 import {
   err,
-  failure,
   type Failure,
   type Result,
 } from '../../../../shared/errors/index.js';
 import { assertEventWork } from '../../../../shared/events/index.js';
 import { enqueue } from '../../../../shared/events/postgres/index.js';
-import { map, type TransactionDatabase } from '../../../../shared/postgres/index.js';
+import {
+  map,
+  missingOrStale,
+  violatedUnique,
+  type TransactionDatabase,
+} from '../../../../shared/postgres/index.js';
+import {
+  CONSTRAINTS,
+  documentExists,
+  documentNotFound,
+  staleWrite,
+} from '../failures.js';
 import type { DocumentCommit, DocumentWriter } from '../../app/index.js';
 
 export class PostgresDocumentWriter implements DocumentWriter {
@@ -43,9 +53,13 @@ export class PostgresDocumentWriter implements DocumentWriter {
                     status=$4,
                     processing_failure_code=$5,
                     updated_at=$6,
-                    archived_at=$7
+                    archived_at=$7,
+                    processing_run=$10::uuid,
+                    processing_attempt=$11,
+                    version=version+1
               WHERE id=$1::uuid
-                AND organization_id=$8::uuid`,
+                AND organization_id=$8::uuid
+                AND version=$9`,
             [
               input.document.id,
               input.document.name,
@@ -55,20 +69,31 @@ export class PostgresDocumentWriter implements DocumentWriter {
               input.document.updatedAt,
               input.document.archivedAt,
               input.document.organizationId,
+              input.document.version,
+              input.document.processingRun,
+              input.document.processingAttempt,
             ],
           );
           if (updated.rowCount !== 1) {
             return err(
-              failure('not_found', 'document was not found', {
-                type: 'document.not_found',
-              }),
+              (await missingOrStale(
+                transaction,
+                'public.n2f_document_documents',
+                input.document.id,
+              )) === 'missing'
+                ? documentNotFound()
+                : staleWrite(),
             );
           }
         }
 
         return await enqueue(transaction, input.event);
       } catch (cause) {
-        return err(map(cause));
+        return err(
+          violatedUnique(cause) === CONSTRAINTS.documentPkey
+            ? documentExists()
+            : map(cause),
+        );
       }
     }, input.signal);
   }

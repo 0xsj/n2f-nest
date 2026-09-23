@@ -34,7 +34,7 @@ class TestIds implements IDGenerator {
   }
 }
 
-function command(): RecordAuditEventCommand {
+function command(withSubject = true): RecordAuditEventCommand {
   const work = restoreWork({
     workId: ids[0]!,
     correlationId: ids[1]!,
@@ -51,6 +51,7 @@ function command(): RecordAuditEventCommand {
     1000,
     work.value,
     { identity_id: ids[0]!, status: 'pending_verification' },
+    withSubject ? { kind: 'identity', id: ids[0]! } : undefined,
   );
   if (!event.ok) throw new Error('audit event invalid');
   return { event: event.value };
@@ -75,12 +76,32 @@ describe('RecordAuditEvent', () => {
 
     expect(result.ok).toBe(true);
     expect(received?.eventType).toBe('identity.registered.v1');
-    expect(received?.subject?.id).toBe(ids[0]);
+    expect(received?.subject).toEqual({ kind: 'identity', id: ids[0] });
     expect(received?.provenance.workId).toBe(ids[0]);
   });
 
+  it('takes the subject only from the envelope, never from payload fields', async () => {
+    let received: AuditEntry | undefined;
+    const writer: AuditEntryWriter = {
+      record: async (entry): Promise<Result<AuditWriteResult, never>> => {
+        received = entry;
+        return ok({ entry, created: true });
+      },
+    };
+    const useCase = new RecordAuditEvent({
+      clock: new FakeClock(new Date(2000)),
+      ids: new TestIds(),
+      writer,
+    });
+
+    const result = await useCase.execute(command(false));
+
+    expect(result.ok).toBe(true);
+    expect(received?.subject).toBeNull();
+  });
+
   it('preserves a no-subject event as a valid audit fact', async () => {
-    const original = command();
+    const original = command(false);
     const raw = JSON.parse(new TextDecoder().decode(original.event.bytes())) as Record<string, unknown>;
     const withoutSubject = Envelope.decode(
       Buffer.from(JSON.stringify({ ...raw, payload: { status: 'ok' } })),

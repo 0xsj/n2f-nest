@@ -21,6 +21,20 @@ export type Config = {
 
 export type Migration = { version: number; sql: string };
 
+/**
+ * A completed migration history that was squashed into baselines. A database
+ * whose `ledger` holds exactly `versions` rows, ending with `finalChecksum`,
+ * already has the baseline schema: its baselines (versions up to
+ * `baselineThrough`) are recorded as applied instead of run, and the old
+ * ledger is dropped. Any other state of that ledger is refused.
+ */
+export type LegacyHistory = Readonly<{
+  ledger: string;
+  versions: number;
+  finalChecksum: string;
+  baselineThrough: number;
+}>;
+
 const invalid = () =>
   failure('invalid', 'invalid database configuration', {
     type: 'database.config',
@@ -38,12 +52,48 @@ const drift = () =>
     type: 'database.migration_drift',
   });
 
+/**
+ * Name the unique constraint a statement violated. Adapters use it to report
+ * the domain conflict (a taken email or slug) instead of a generic one.
+ */
+export function violatedUnique(error: unknown): string | undefined {
+  return error instanceof pg.DatabaseError && error.code === '23505'
+    ? error.constraint
+    : undefined;
+}
+
+/**
+ * After a versioned UPDATE matched no row, tell a missing record from a read
+ * that another writer has since superseded.
+ */
+export async function missingOrStale(
+  client: pg.PoolClient,
+  table: string,
+  id: string,
+): Promise<'missing' | 'stale'> {
+  if (!/^[a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*$/.test(table)) {
+    throw new TypeError('table must be a qualified identifier');
+  }
+  const result = await client.query(
+    `SELECT 1 FROM ${table} WHERE id=$1::uuid`,
+    [id],
+  );
+  return result.rowCount === 0 ? 'missing' : 'stale';
+}
+
 export function map(error: unknown): Failure {
   if (kindOf(error)) return fromCaught(error);
   if (error instanceof pg.DatabaseError) {
-    if (['23505', '40001', '40P01'].includes(error.code ?? '')) {
+    if (error.code === '23505') {
       return failure('conflict', 'database operation failed', {
         type: 'database.conflict',
+      });
+    }
+    // Serialization failures and deadlocks say nothing about the request; the
+    // same operation can succeed when retried.
+    if (error.code === '40001' || error.code === '40P01') {
+      return failure('unavailable', 'database operation was not serializable', {
+        type: 'database.serialization',
       });
     }
     if (error.code === '57014') return timedOut();
@@ -117,13 +167,18 @@ export class Database {
     }, signal);
   }
 
-  /** Callback must await all work; the leased client must never escape its lifetime. */
+  /**
+   * Callback must await all work; the leased client must never escape its
+   * lifetime. `budgetMs` overrides the configured operation budget for work
+   * known to be long, such as migrations.
+   */
   async transaction<T>(
     fn: (
       client: pg.PoolClient,
       signal: AbortSignal,
     ) => Promise<Result<T, Failure>>,
     signal?: AbortSignal,
+    budgetMs: number = this.budget,
   ): Promise<Result<T, Failure>> {
     if (this.#closing) {
       return err(
@@ -177,7 +232,7 @@ export class Database {
     };
     const timer = setTimeout(
       () => stop(false),
-      Math.max(1, this.budget - (performance.now() - started)),
+      Math.max(1, budgetMs - (performance.now() - started)),
     );
     const onAbort = () => stop(true);
     signal?.addEventListener('abort', onAbort, { once: true });
@@ -243,10 +298,22 @@ export class Database {
     }
   }
 
+  /**
+   * Apply pending migrations in one transaction under their own budget: a
+   * migration may rebuild an index or wait for another process's migration
+   * lock, which the ordinary operation budget would cut short.
+   */
   async migrate(
     migrations: readonly Migration[],
+    budgetMs = 120_000,
+    legacy?: LegacyHistory,
   ): Promise<Result<void, Failure>> {
-    const entries = migrations.map((migration) => ({ ...migration }));
+    if (!Number.isInteger(budgetMs) || budgetMs < 1) return err(invalid());
+    if (legacy && !/^[a-z_][a-z0-9_]*$/.test(legacy.ledger)) return err(invalid());
+    const entries = migrations.map((migration) => ({
+      ...migration,
+      checksum: createHash('sha256').update(migration.sql).digest('hex'),
+    }));
     let previous = 0;
     for (const migration of entries) {
       if (
@@ -259,37 +326,94 @@ export class Database {
       previous = migration.version;
     }
 
-    return this.transaction(async (transaction) => {
-      await transaction.query('SELECT pg_advisory_xact_lock(925005)');
-      await transaction.query(
-        'CREATE TABLE IF NOT EXISTS public.signals_migrations (version bigint PRIMARY KEY, checksum text NOT NULL)',
+    let transaction!: pg.PoolClient;
+    const long = (text: string, values?: unknown[]) =>
+      transaction.query({ text, values, query_timeout: budgetMs } as pg.QueryConfig);
+    return this.transaction(async (client) => {
+      transaction = client;
+      await client.query(`SET LOCAL statement_timeout = ${budgetMs}`);
+      await client.query(`SET LOCAL lock_timeout = ${budgetMs}`);
+      await client.query(`SET LOCAL idle_in_transaction_session_timeout = ${budgetMs}`);
+      await long('SELECT pg_advisory_xact_lock(925005)');
+      await client.query(
+        'CREATE TABLE IF NOT EXISTS public.n2f_migrations (version bigint PRIMARY KEY, checksum text NOT NULL, applied_at timestamptz NOT NULL DEFAULT clock_timestamp())',
       );
-      const rows = (
-        await transaction.query<{ version: string; checksum: string }>(
-          'SELECT version,checksum FROM public.signals_migrations ORDER BY version',
+      let rows = (
+        await client.query<{ version: string; checksum: string }>(
+          'SELECT version,checksum FROM public.n2f_migrations ORDER BY version',
         )
       ).rows;
+
+      if (rows.length === 0 && legacy) {
+        const adopted = await this.adopt(client, legacy, entries);
+        if (!adopted.ok) return adopted;
+        rows = adopted.value;
+      }
+
       if (rows.length > entries.length) return err(drift());
       for (const [index, migration] of entries.entries()) {
-        const checksum = createHash('sha256')
-          .update(migration.sql)
-          .digest('hex');
         if (index < rows.length) {
           if (
             rows[index].version !== String(migration.version) ||
-            rows[index].checksum !== checksum
+            rows[index].checksum !== migration.checksum
           ) {
             return err(drift());
           }
         } else {
-          await transaction.query(migration.sql);
-          await transaction.query(
-            'INSERT INTO public.signals_migrations(version,checksum) VALUES ($1,$2)',
-            [migration.version, checksum],
+          await long(migration.sql);
+          await client.query(
+            'INSERT INTO public.n2f_migrations(version,checksum) VALUES ($1,$2)',
+            [migration.version, migration.checksum],
           );
         }
       }
       return ok(undefined);
-    });
+    }, undefined, budgetMs);
   }
+
+  /** Record a completed legacy history as its baselines; see `LegacyHistory`. */
+  private async adopt(
+    client: pg.PoolClient,
+    legacy: LegacyHistory,
+    entries: ReadonlyArray<Migration & { checksum: string }>,
+  ): Promise<Result<{ version: string; checksum: string }[], Failure>> {
+    const exists = (
+      await client.query<{ present: boolean }>(
+        'SELECT to_regclass($1) IS NOT NULL AS present',
+        [`public.${legacy.ledger}`],
+      )
+    ).rows[0]?.present;
+    if (!exists) return ok([]);
+
+    const history = (
+      await client.query<{ count: string; last: string | null; checksum: string | null }>(
+        `SELECT count(*) AS count, max(version) AS last,
+                (SELECT checksum FROM public.${legacy.ledger} ORDER BY version DESC LIMIT 1) AS checksum
+           FROM public.${legacy.ledger}`,
+      )
+    ).rows[0];
+    if (
+      Number(history?.count) !== legacy.versions ||
+      Number(history?.last) !== legacy.versions ||
+      history?.checksum !== legacy.finalChecksum
+    ) {
+      return err(
+        failure('conflict', 'database predates the migration baseline', {
+          type: 'database.legacy_history',
+          fields: { ledger: legacy.ledger },
+        }),
+      );
+    }
+
+    const baselines = entries.filter((entry) => entry.version <= legacy.baselineThrough);
+    for (const baseline of baselines) {
+      await client.query('INSERT INTO public.n2f_migrations(version,checksum) VALUES ($1,$2)', [
+        baseline.version,
+        baseline.checksum,
+      ]);
+    }
+    await client.query(`DROP TABLE public.${legacy.ledger}`);
+    return ok(baselines.map((baseline) => ({ version: String(baseline.version), checksum: baseline.checksum })));
+  }
+
 }

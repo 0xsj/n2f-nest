@@ -6,7 +6,8 @@ import {
 import { enqueue } from '../../../../shared/events/postgres/index.js';
 import { assertEventWork } from '../../../../shared/events/index.js';
 import type { Envelope } from '../../../../shared/events/index.js';
-import { map } from '../../../../shared/postgres/index.js';
+import { map, violatedUnique } from '../../../../shared/postgres/index.js';
+import { challengeExists } from '../failures.js';
 import type { WorkContext } from '../../../../shared/provenance/index.js';
 import type { SecretString } from '../../../../shared/secret/index.js';
 import type { VerificationChallenge } from '../../domain/index.js';
@@ -49,7 +50,11 @@ export class PostgresVerificationChallengeWriter
         );
         return enqueue(transaction, input.event);
       } catch (cause) {
-        return err(map(cause));
+        return err(
+          violatedUnique(cause) === 'n2f_identity_verification_challenges_pkey'
+            ? challengeExists()
+            : map(cause),
+        );
       }
     }, signal);
   }

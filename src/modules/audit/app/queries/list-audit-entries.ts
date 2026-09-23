@@ -24,7 +24,7 @@ export type ListAuditEntriesDependencies = Readonly<{
   reader: AuditEntryReader;
 }>;
 
-function view(entry: AuditEntry): AuditEntryView {
+export function view(entry: AuditEntry): AuditEntryView {
   const work = entry.provenance;
   return {
     auditEntryId: entry.id,

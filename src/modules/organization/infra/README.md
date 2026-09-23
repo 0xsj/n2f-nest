@@ -3,8 +3,9 @@
 The process-local and PostgreSQL adapters implement the same application
 ports. `InMemoryOrganizationWriter` owns the local commit boundary, while
 `PostgresOrganizationWriter` uses one transaction for the organization row,
-owner membership and outbox events. `IdentityCurrentActorReader` adapts
-Identity's current-identity query to the Organization-owned actor port.
+owner membership and outbox events. Organization's actor and
+identity-reference ports are supplied from outside the module through
+`ORGANIZATION_REQUIRES` (see `src/integration/organization-identity.ts`).
 Neither adapter leaks into the Organization or Membership domain objects.
 
 Membership role changes use separate reader and writer ports. Both in-memory

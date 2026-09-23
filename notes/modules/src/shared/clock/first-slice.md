@@ -5,7 +5,7 @@ without letting those consumers reach directly into the operating system.
 
 ## Origin
 
-Ported from the previous Signals backend on 2026-09-18 after the errors leaf.
+Ported from the predecessor product's backend on 2026-09-18 after the errors leaf.
 The behavior was retained, while the new backend adds explicit `WallClock`,
 `MonotonicClock` and combined `Clock` interfaces for narrower dependencies.
 

@@ -11,6 +11,8 @@ import {
   FaultInjector,
 } from '../src/platform/chaos/index.js';
 import type { Database } from '../src/shared/postgres/index.js';
+import { mailbox, verificationFrom } from './support/mail.js';
+import { resetLoopbackRateLimits } from './support/rate-limits.js';
 
 const enabled = process.env.N2F_RUN_POSTGRES_INTEGRATION === '1';
 const integration = enabled ? describe : describe.skip;
@@ -43,6 +45,7 @@ integration('PostgreSQL runtime integration', () => {
   let app: INestApplication | undefined;
 
   beforeAll(async () => {
+    await resetLoopbackRateLimits();
     app = await NestFactory.create(AppModule, { logger: false });
     await app.init();
   });
@@ -60,32 +63,22 @@ integration('PostgreSQL runtime integration', () => {
       .post('/identity/register')
       .send({ email, password });
 
-    expect(registered.status).toBe(201);
-    expect(registered.body.status).toBe('pending_verification');
-    expect(typeof registered.body.identityId).toBe('string');
+    expect(registered.status).toBe(202);
+    expect(registered.body).toMatchObject({ status: 'accepted' });
 
-    const identityId = registered.body.identityId as string;
-    const challenge = await request(app.getHttpServer())
-      .post('/identity/verification-challenges')
-      .send({ identityId });
-
-    expect(challenge.status).toBe(201);
-    expect(challenge.body.identityId).toBe(identityId);
-    expect(typeof challenge.body.challengeId).toBe('string');
-    expect(typeof challenge.body.token).toBe('string');
+    const mail = await request(app.getHttpServer()).get(mailbox(email));
+    expect(mail.body).toHaveLength(1);
 
     const verified = await request(app.getHttpServer())
       .post('/identity/verify')
-      .send({
-        challengeId: challenge.body.challengeId,
-        token: challenge.body.token,
-      });
+      .send(verificationFrom(mail.body[0]));
 
     expect(verified.status).toBe(201);
     expect(verified.body).toEqual({
-      identityId,
+      identityId: expect.any(String),
       status: 'active',
     });
+    const identityId = verified.body.identityId as string;
 
     const loggedIn = await request(app.getHttpServer())
       .post('/identity/login')
@@ -287,7 +280,8 @@ integration('PostgreSQL runtime integration', () => {
       'organization.created.v1',
       'organization.membership.added.v1',
     ];
-    const identityEventTypesForSubject = [
+    // Every event this identity caused, found in the outbox by its payload.
+    const actorEventTypes = [
       ...identityEventTypes,
       ...organizationEventTypes,
       'document.created.v1',
@@ -298,7 +292,34 @@ integration('PostgreSQL runtime integration', () => {
       'job.completed.v1',
       'job.completed.v1',
     ];
-    const eventTypes = identityEventTypesForSubject;
+    // Audit files each event under the aggregate its module names on the
+    // envelope, so only Identity's own events carry the identity subject.
+    const identityEventTypesForSubject = identityEventTypes;
+    const aggregateSubjects = await eventually(
+      async () => request(app!.getHttpServer()).get('/audit/entries'),
+      (response) =>
+        response.status === 200 &&
+        response.body.some(
+          (entry: { eventType?: string; subject?: { kind?: string; id?: string } }) =>
+            entry.eventType === 'organization.created.v1' &&
+            entry.subject?.kind === 'organization' &&
+            entry.subject.id === organization.body.organizationId,
+        ) &&
+        response.body.some(
+          (entry: { eventType?: string; subject?: { kind?: string; id?: string } }) =>
+            entry.eventType === 'organization.membership.added.v1' &&
+            entry.subject?.kind === 'membership' &&
+            entry.subject.id === organization.body.ownerMembershipId,
+        ) &&
+        response.body.some(
+          (entry: { eventType?: string; subject?: { kind?: string; id?: string } }) =>
+            entry.eventType === 'document.created.v1' &&
+            entry.subject?.kind === 'document' &&
+            entry.subject.id === document.body.documentId,
+        ),
+    );
+    expect(aggregateSubjects.status).toBe(200);
+    const eventTypes = actorEventTypes;
     const audit = await eventually(
       async () => {
         return request(app!.getHttpServer()).get('/audit/entries');
@@ -448,7 +469,7 @@ integration('PostgreSQL runtime integration', () => {
         [...eventTypes].sort(),
       );
       expect(persisted.value.entries).toEqual(
-        [...eventTypes]
+        [...identityEventTypes]
           .sort()
           .map((event_type) => ({ event_type, subject_id: identityId })),
       );

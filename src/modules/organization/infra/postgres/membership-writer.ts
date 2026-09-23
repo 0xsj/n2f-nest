@@ -5,10 +5,26 @@ import {
 } from '../../../../shared/errors/index.js';
 import { assertEventWork } from '../../../../shared/events/index.js';
 import { enqueue } from '../../../../shared/events/postgres/index.js';
-import { map, type TransactionDatabase } from '../../../../shared/postgres/index.js';
+import {
+  map,
+  missingOrStale,
+  violatedUnique,
+  type TransactionDatabase,
+} from '../../../../shared/postgres/index.js';
+import { UNSAVED } from '../../../../shared/version/index.js';
 import type { MembershipWriter } from '../../app/index.js';
 import type { MembershipCommit } from '../../app/ports/index.js';
+import {
+  CONSTRAINTS,
+  membershipExists,
+  membershipNotFound,
+  staleWrite,
+} from '../failures.js';
 
+/**
+ * Inserts a new membership or updates a loaded one. An update applies only
+ * when the row still holds the version the command read.
+ */
 export class PostgresMembershipWriter implements MembershipWriter {
   constructor(private readonly database: TransactionDatabase) {}
 
@@ -16,49 +32,61 @@ export class PostgresMembershipWriter implements MembershipWriter {
     return this.database.transaction<void>(async (transaction) => {
       const provenance = assertEventWork(input.event, input.work);
       if (!provenance.ok) return provenance;
+      const membership = input.membership;
 
       try {
-        const inserted = await transaction.query(
-          `INSERT INTO public.n2f_organization_memberships
-            (id,organization_id,identity_id,role,status,created_at,updated_at,revoked_at)
-           VALUES ($1::uuid,$2::uuid,$3::uuid,$4,$5,$6,$7,$8)
-           ON CONFLICT (id) DO NOTHING`,
-          [
-            input.membership.id,
-            input.membership.organizationId,
-            input.membership.identityId,
-            input.membership.role,
-            input.membership.status,
-            input.membership.createdAt,
-            input.membership.updatedAt,
-            input.membership.revokedAt,
-          ],
-        );
-        if (inserted.rowCount !== 1) {
+        if (membership.version === UNSAVED) {
+          await transaction.query(
+            `INSERT INTO public.n2f_organization_memberships
+              (id,organization_id,identity_id,role,status,created_at,updated_at,revoked_at)
+             VALUES ($1::uuid,$2::uuid,$3::uuid,$4,$5,$6,$7,$8)`,
+            [
+              membership.id,
+              membership.organizationId,
+              membership.identityId,
+              membership.role,
+              membership.status,
+              membership.createdAt,
+              membership.updatedAt,
+              membership.revokedAt,
+            ],
+          );
+        } else {
           const updated = await transaction.query(
             `UPDATE public.n2f_organization_memberships
-                SET role=$2,status=$3,updated_at=$4,revoked_at=$5
-              WHERE id=$1::uuid`,
+                SET role=$2,status=$3,updated_at=$4,revoked_at=$5,version=version+1
+              WHERE id=$1::uuid AND version=$6`,
             [
-              input.membership.id,
-              input.membership.role,
-              input.membership.status,
-              input.membership.updatedAt,
-              input.membership.revokedAt,
+              membership.id,
+              membership.role,
+              membership.status,
+              membership.updatedAt,
+              membership.revokedAt,
+              membership.version,
             ],
           );
           if (updated.rowCount !== 1) {
-            return err({
-              kind: 'not_found',
-              message: 'membership was not found',
-              type: 'organization.membership.not_found',
-            });
+            return err(
+              (await missingOrStale(
+                transaction,
+                'public.n2f_organization_memberships',
+                membership.id,
+              )) === 'missing'
+                ? membershipNotFound()
+                : staleWrite(),
+            );
           }
         }
 
         return enqueue(transaction, input.event);
       } catch (cause) {
-        return err(map(cause));
+        const constraint = violatedUnique(cause);
+        return err(
+          constraint === CONSTRAINTS.membershipPkey ||
+            constraint === CONSTRAINTS.membershipIdentity
+            ? membershipExists()
+            : map(cause),
+        );
       }
     }, input.signal);
   }

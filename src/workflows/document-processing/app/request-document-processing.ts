@@ -17,12 +17,14 @@ import type { SecretString } from '../../../shared/secret/index.js';
 import {
   BeginDocumentProcessing,
   type ProcessDocumentResult,
-} from '../../../modules/document/app/index.js';
+} from '../../../modules/document/commands.js';
 import {
   SubmitWorkflowJob,
   type SubmitWorkflowJobResult,
-} from '../../../modules/jobs/app/index.js';
-import { GetOrganizationMembership } from '../../../modules/organization/app/index.js';
+} from '../../../modules/jobs/commands.js';
+import { DOCUMENT_PROCESSING_JOB_KIND } from '../infra/job-events.js';
+import { GetOrganizationMembership } from '../../../modules/organization/api.js';
+import { CheckDocumentProcessable } from '../../../modules/document/api.js';
 
 export type RequestDocumentProcessingCommand = Readonly<{
   sessionToken: SecretString;
@@ -35,6 +37,7 @@ export type RequestDocumentProcessingCommand = Readonly<{
 
 export type RequestDocumentProcessingDependencies = Readonly<{
   membership: GetOrganizationMembership;
+  processable: CheckDocumentProcessable;
   factory: ProvenanceFactory;
   begin: BeginDocumentProcessing;
   submit: SubmitWorkflowJob;
@@ -111,35 +114,48 @@ export class RequestDocumentProcessing {
       );
     }
 
-    const beginWork = childWork(
-      this.dependencies.factory,
-      command.work,
-      'document.processing.start',
-    );
-    if (!beginWork.ok) return beginWork;
-    const begun = await this.dependencies.begin.execute({
+    // Refuse before creating work for a document that cannot be processed.
+    const processable = await this.dependencies.processable.execute({
       organizationId: command.organizationId,
       documentId: command.documentId,
-      work: beginWork.value,
       signal: command.signal,
     });
-    if (!begun.ok) return begun;
+    if (!processable.ok) return processable;
 
+    // Ensure the document's open job first: its ID names the processing run
+    // the document then waits on, so outcomes of any older job are stale.
     const jobWork = childWork(
       this.dependencies.factory,
-      beginWork.value,
+      command.work,
       'job.submit.workflow',
     );
     if (!jobWork.ok) return jobWork;
     const submitted = await this.dependencies.submit.execute({
       organizationId: command.organizationId,
-      kind: 'document.process',
+      kind: DOCUMENT_PROCESSING_JOB_KIND,
       subject: { type: 'document', id: command.documentId },
       maxAttempts: command.maxAttempts,
       work: jobWork.value,
       signal: command.signal,
     });
     if (!submitted.ok) return submitted;
+
+    const beginWork = childWork(
+      this.dependencies.factory,
+      jobWork.value,
+      'document.processing.start',
+    );
+    if (!beginWork.ok) return beginWork;
+    // A failure here leaves an open job whose outcomes this document ignores;
+    // repeating the request reuses that job and begins its run.
+    const begun = await this.dependencies.begin.execute({
+      organizationId: command.organizationId,
+      documentId: command.documentId,
+      processingRun: submitted.value.jobId,
+      work: beginWork.value,
+      signal: command.signal,
+    });
+    if (!begun.ok) return begun;
 
     return ok({
       documentId: begun.value.documentId,

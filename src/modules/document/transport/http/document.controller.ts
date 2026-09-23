@@ -8,7 +8,11 @@ import {
   HttpStatus,
   Param,
   Post,
+  Query,
+  Res,
 } from '@nestjs/common';
+import { perClient, RateLimit } from '../../../../platform/ratelimit/index.js';
+import type { Response } from 'express';
 import {
   err,
   failure,
@@ -104,6 +108,8 @@ function view(document: Document) {
   };
 }
 
+/** Per-client bound on this controller's requests; see platform/ratelimit. */
+@RateLimit(perClient('document', 120, 60_000))
 @Controller('organizations/:organizationId/documents')
 export class DocumentController {
   constructor(
@@ -136,17 +142,22 @@ export class DocumentController {
     );
   }
 
+  /** One page of documents; `X-Next-Cursor` carries the cursor for the next. */
   @Get()
   async listDocuments(
     @Param('organizationId') organizationIdValue: string | undefined,
+    @Res({ passthrough: true }) response: Response,
     @Headers('authorization') authorization?: string,
+    @Query('limit') limit?: string,
+    @Query('cursor') cursor?: string,
   ) {
     const organizationId = respond(parameter(organizationIdValue));
     const sessionToken = respond(bearer(authorization));
-    const documents = respond(
-      await this.list.execute({ sessionToken, organizationId }),
+    const page = respond(
+      await this.list.execute({ sessionToken, organizationId, limit, cursor }),
     );
-    return documents.map(view);
+    if (page.nextCursor) response.setHeader('X-Next-Cursor', page.nextCursor);
+    return page.items.map(view);
   }
 
   @Get(':documentId')

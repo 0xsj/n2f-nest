@@ -10,13 +10,12 @@ import { Database } from '../../shared/postgres/index.js';
 import { SystemClock } from '../../shared/clock/index.js';
 import { V7 } from '../../shared/id/index.js';
 import { PlatformEventsModule } from '../events/events.module.js';
-import { InMemoryEventBus } from '../events/in-memory-event-bus.js';
-import { DurableInProcessPublisher } from '../events/durable-in-process-publisher.js';
+import { EVENT_BUS, type EventBus } from '../events/event-bus.js';
 import { Broker } from '../../shared/events/nats/index.js';
 import type { Publisher } from '../../shared/events/index.js';
 import { OutboxDispatcher } from '../events/outbox-dispatcher.js';
-import type { Migration } from '../../shared/postgres/index.js';
-import { loadRuntimeConfig, type RuntimeConfig } from './config.js';
+import type { LegacyHistory, Migration } from '../../shared/postgres/index.js';
+import { describeConfigFailure, loadRuntimeConfig, type RuntimeConfig } from './config.js';
 import {
   DATABASE,
   DURABLE_EVENT_PUBLISHER,
@@ -27,6 +26,7 @@ import {
 } from './tokens.js';
 import { OutboxWorker } from './outbox-worker.js';
 import { NatsEventWorker } from './nats-event-worker.js';
+import { EventMaintenance } from './event-maintenance.js';
 import { Store as PostgresEventStore } from '../../shared/events/postgres/index.js';
 import { usesPostgres } from './storage.js';
 
@@ -49,7 +49,7 @@ class DatabaseLifecycle implements OnApplicationShutdown {
 @Global()
 @Module({})
 export class PlatformRuntimeModule {
-  static forRoot(migrations: readonly Migration[]): DynamicModule {
+  static forRoot(migrations: readonly Migration[], legacy?: LegacyHistory): DynamicModule {
     return {
       module: PlatformRuntimeModule,
       imports: [PlatformEventsModule],
@@ -58,7 +58,7 @@ export class PlatformRuntimeModule {
           provide: RUNTIME_CONFIG,
           useFactory: (): RuntimeConfig => {
             const result = loadRuntimeConfig();
-            if (!result.ok) throw new Error(result.error.message);
+            if (!result.ok) throw new Error(describeConfigFailure(result.error));
             return result.value;
           },
         },
@@ -70,7 +70,11 @@ export class PlatformRuntimeModule {
             }
             const opened = await Database.open(config.database);
             if (!opened.ok) throw new Error(opened.error.message);
-            const migrated = await opened.value.migrate(migrations);
+            const migrated = await opened.value.migrate(
+              migrations,
+              config.database.migrationTimeoutMs,
+              legacy,
+            );
             if (!migrated.ok) {
               await opened.value.close(config.database.timeoutMs);
               throw new Error(migrated.error.message);
@@ -113,15 +117,16 @@ export class PlatformRuntimeModule {
         },
         {
           provide: DURABLE_EVENT_PUBLISHER,
+          // Local transport: the outbox hands committed events straight to
+          // the PostgreSQL inbox. NATS transport: the outbox publishes to
+          // JetStream and NatsEventWorker hands deliveries to the inbox.
           useFactory: (
             config: RuntimeConfig,
             broker: Broker | undefined,
-            bus: InMemoryEventBus,
+            bus: EventBus,
           ) =>
-            config.eventTransport === 'nats'
-              ? brokerOrThrow(broker)
-              : new DurableInProcessPublisher(bus),
-          inject: [RUNTIME_CONFIG, NATS_BROKER, InMemoryEventBus],
+            config.eventTransport === 'nats' ? brokerOrThrow(broker) : bus,
+          inject: [RUNTIME_CONFIG, NATS_BROKER, EVENT_BUS],
         },
         {
           provide: OUTBOX_DISPATCHER,
@@ -143,6 +148,7 @@ export class PlatformRuntimeModule {
         },
         OutboxWorker,
         NatsEventWorker,
+        EventMaintenance,
         DatabaseLifecycle,
       ],
       exports: [RUNTIME_CONFIG, DATABASE, NATS_BROKER],

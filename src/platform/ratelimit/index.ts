@@ -8,6 +8,8 @@ export { InMemoryRateLimitStore } from './in-memory-store.js';
 export { PostgresRateLimitStore } from './postgres/index.js';
 export {
   RateLimit,
+  clientOf,
+  perClient,
   RATE_LIMIT_POLICY,
   type HttpRateLimitPolicy,
 } from './policy.js';

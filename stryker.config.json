@@ -1,0 +1,33 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "_comment": "Mutation testing of the core layers (hardening item E4). A surviving mutant is a behaviour change no test notices. 'break' is a ratchet: raise it as scores improve, never lower it.",
+  "testRunner": "vitest",
+  "vitest": {
+    "configFile": "vitest.config.ts"
+  },
+  "coverageAnalysis": "perTest",
+  "mutate": [
+    "src/modules/*/domain/**/*.ts",
+    "src/shared/events/retry.ts",
+    "src/shared/version/index.ts",
+    "src/shared/pagination/index.ts",
+    "!src/**/*.spec.ts"
+  ],
+  "reporters": [
+    "clear-text",
+    "progress",
+    "html"
+  ],
+  "htmlReporter": {
+    "fileName": "reports/mutation/index.html"
+  },
+  "thresholds": {
+    "high": 90,
+    "low": 80,
+    "break": 90
+  },
+  "concurrency": 4,
+  "timeoutMS": 30000,
+  "tempDirName": ".stryker-tmp",
+  "cleanTempDir": "always"
+}

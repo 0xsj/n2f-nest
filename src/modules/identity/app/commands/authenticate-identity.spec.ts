@@ -19,19 +19,39 @@ import { SecretString } from '../../../../shared/secret/index.js';
 import {
   Credential,
   Identity,
-  type Session,
+  Session,
 } from '../../domain/index.js';
 import {
   AuthenticateIdentity,
   type AuthenticateIdentityCommand,
 } from './authenticate-identity.js';
 import type {
+  ActiveSessionReader,
   CredentialAuthenticatorReader,
   PasswordVerifier,
+  SessionEviction,
   SessionPolicy,
   SessionTokenIssuer,
   SessionWriter,
 } from '../ports/index.js';
+
+const HOUR = 60 * 60 * 1000;
+
+/** A stored, active session of the test identity created `hoursAgo` before login. */
+function priorSession(id: ID, hoursAgo: number, lastSeenHoursAgo = hoursAgo): Session {
+  const result = Session.restore({
+    id,
+    identityId: validIds[0]!,
+    status: 'active',
+    createdAt: new Date(createdAt.getTime() - hoursAgo * HOUR),
+    expiresAt: new Date(createdAt.getTime() - hoursAgo * HOUR + 24 * HOUR),
+    lastSeenAt: new Date(createdAt.getTime() - lastSeenHoursAgo * HOUR),
+    revokedAt: null,
+    version: 1,
+  });
+  if (!result.ok) throw new Error(result.error.message);
+  return result.value;
+}
 
 const parsedIds = [
   '00000000-0000-7000-8000-000000000001',
@@ -39,6 +59,12 @@ const parsedIds = [
   '00000000-0000-7000-8000-000000000003',
   '00000000-0000-7000-8000-000000000004',
   '00000000-0000-7000-8000-000000000005',
+  '00000000-0000-7000-8000-000000000006',
+  '00000000-0000-7000-8000-000000000007',
+  '00000000-0000-7000-8000-000000000008',
+  '00000000-0000-7000-8000-000000000009',
+  '00000000-0000-7000-8000-00000000000a',
+  '00000000-0000-7000-8000-00000000000b',
 ].map((value) => parse(value));
 
 if (parsedIds.some((result) => !result.ok)) {
@@ -115,7 +141,9 @@ function command(): AuthenticateIdentityCommand {
   };
 }
 
-function setup() {
+function setup(
+  options: Readonly<{ active?: readonly Session[]; maxActivePerIdentity?: number }> = {},
+) {
   const identity = activeIdentity();
   const credential = activeCredential();
   let verifyCalls = 0;
@@ -124,6 +152,7 @@ function setup() {
         session: Session;
         tokenDigest: SecretString;
         event: Envelope;
+        evicted: readonly SessionEviction[];
       }>
     | undefined;
 
@@ -155,10 +184,20 @@ function setup() {
             hash.reveal() === 'stored-hash',
         );
       },
+      verifyDecoy: async () => {
+        verifyCalls += 1;
+        return ok(false as const);
+      },
     } satisfies PasswordVerifier,
     sessions: {
       expiresAt: () => ok(expiresAt),
+      idleTimeoutMs: 2 * HOUR,
+      activityIntervalMs: 60 * 1000,
+      maxActivePerIdentity: options.maxActivePerIdentity ?? 10,
     } satisfies SessionPolicy,
+    active: {
+      listActive: async () => ok(options.active ?? []),
+    } satisfies ActiveSessionReader,
     tokens: {
       issue: async () =>
         ok({
@@ -212,7 +251,7 @@ describe('AuthenticateIdentity', () => {
   });
 
   it('returns one unauthenticated result for unknown credentials', async () => {
-    const { useCase } = setup();
+    const { getVerifyCalls, useCase } = setup();
     const result = await useCase.execute({
       ...command(),
       email: 'unknown@example.com',
@@ -225,6 +264,8 @@ describe('AuthenticateIdentity', () => {
     }
 
     expect(result.error.type).toBe('identity.invalid_credentials');
+    // An unknown email still spends one password verification (the decoy).
+    expect(getVerifyCalls()).toBe(1);
   });
 
   it('rejects oversized passwords before invoking the verifier', async () => {
@@ -242,5 +283,48 @@ describe('AuthenticateIdentity', () => {
 
     expect(result.error.type).toBe('identity.invalid_credentials');
     expect(getVerifyCalls()).toBe(0);
+  });
+});
+
+describe('AuthenticateIdentity session cap', () => {
+  it('revokes the oldest usable sessions so the identity keeps the cap', async () => {
+    const [a, b, c] = [validIds[5]!, validIds[6]!, validIds[7]!];
+    const { getCommitted, useCase } = setup({
+      maxActivePerIdentity: 2,
+      active: [priorSession(a, 1), priorSession(b, 0.5), priorSession(c, 1.5)],
+    });
+
+    const result = await useCase.execute(command());
+
+    expect(result.ok).toBe(true);
+    const evicted = getCommitted()?.evicted ?? [];
+    expect(evicted.map((eviction) => eviction.session.id)).toEqual([a, c]);
+    for (const eviction of evicted) {
+      expect(eviction.session.status).toBe('revoked');
+      expect(eviction.session.revokedAt).toEqual(createdAt);
+      expect(eviction.event.type).toBe('identity.session.revoked.v1');
+      expect(eviction.event.payload()).toMatchObject({ session_id: eviction.session.id, reason: 'session_limit' });
+    }
+  });
+
+  it('does not count sessions that can no longer authenticate', async () => {
+    const { getCommitted, useCase } = setup({
+      maxActivePerIdentity: 2,
+      // Idle for 3 hours (limit 2) and expired 1 hour ago: neither is usable.
+      active: [priorSession(validIds[5]!, 4, 3), priorSession(validIds[6]!, 25, 1)],
+    });
+
+    expect((await useCase.execute(command())).ok).toBe(true);
+    expect(getCommitted()?.evicted).toEqual([]);
+  });
+
+  it('evicts nothing below the cap', async () => {
+    const { getCommitted, useCase } = setup({
+      maxActivePerIdentity: 3,
+      active: [priorSession(validIds[5]!, 1), priorSession(validIds[6]!, 2)],
+    });
+
+    expect((await useCase.execute(command())).ok).toBe(true);
+    expect(getCommitted()?.evicted).toEqual([]);
   });
 });

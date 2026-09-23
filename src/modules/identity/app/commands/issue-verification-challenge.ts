@@ -125,6 +125,7 @@ export class IssueVerificationChallenge {
         purpose: challenge.value.purpose,
         expires_at_ms: challenge.value.expiresAt.getTime(),
       },
+      { kind: 'identity', id: challenge.value.identityId },
     );
     if (!event.ok) {
       return err(

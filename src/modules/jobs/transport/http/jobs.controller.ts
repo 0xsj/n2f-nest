@@ -8,7 +8,11 @@ import {
   HttpStatus,
   Param,
   Post,
+  Query,
+  Res,
 } from '@nestjs/common';
+import { perClient, RateLimit } from '../../../../platform/ratelimit/index.js';
+import type { Response } from 'express';
 import {
   err,
   failure,
@@ -109,6 +113,8 @@ function view(job: Job) {
   };
 }
 
+/** Per-client bound on this controller's requests; see platform/ratelimit. */
+@RateLimit(perClient('jobs', 120, 60_000))
 @Controller('organizations/:organizationId/jobs')
 export class JobsController {
   constructor(
@@ -142,14 +148,20 @@ export class JobsController {
     }));
   }
 
+  /** One page of jobs; `X-Next-Cursor` carries the cursor for the next. */
   @Get()
   async listJobs(
     @Param('organizationId') organizationIdValue: string | undefined,
+    @Res({ passthrough: true }) response: Response,
     @Headers('authorization') authorization?: string,
+    @Query('limit') limit?: string,
+    @Query('cursor') cursor?: string,
   ) {
     const organizationId = respond(parameter(organizationIdValue));
     const sessionToken = respond(bearer(authorization));
-    return respond(await this.list.execute({ sessionToken, organizationId })).map(view);
+    const page = respond(await this.list.execute({ sessionToken, organizationId, limit, cursor }));
+    if (page.nextCursor) response.setHeader('X-Next-Cursor', page.nextCursor);
+    return page.items.map(view);
   }
 
   @Post(':jobId/start')

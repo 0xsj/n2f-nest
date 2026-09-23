@@ -3,7 +3,7 @@ import { expect, it } from 'vitest';
 import { traceRef } from '../telemetry/index.js';
 import { Client } from './index.js';
 
-it.skipIf(!process.env.SIGNALS_TEST_NETWORK)(
+it.skipIf(!process.env.N2F_TEST_NETWORK)(
   'executes bounded loopback attempts without redirect or status rewriting',
   async () => {
   const server = createServer((request, response) => {

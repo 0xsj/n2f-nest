@@ -22,7 +22,7 @@ export class AuditEventSubscription implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit(): void {
-    this.unsubscribe = this.bus.subscribe(async (event, signal) => {
+    this.unsubscribe = this.bus.subscribe('audit', async (event, signal) => {
       const result = await this.record.execute({ event, signal });
       if (!result.ok) {
         this.logger.error(

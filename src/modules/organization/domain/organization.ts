@@ -6,6 +6,11 @@ import {
   type Result,
 } from '../../../shared/errors/index.js';
 import type { ID } from '../../../shared/id/index.js';
+import {
+  UNSAVED,
+  isStoredVersion,
+  type Version,
+} from '../../../shared/version/index.js';
 
 export const ORGANIZATION_STATUSES = Object.freeze([
   'active',
@@ -46,6 +51,7 @@ export type RestoreOrganizationInput = Readonly<{
   status: OrganizationStatus;
   createdAt: Date;
   updatedAt: Date;
+  version: Version;
 }>;
 
 type OrganizationState = Readonly<{
@@ -55,6 +61,7 @@ type OrganizationState = Readonly<{
   status: OrganizationStatus;
   createdAt: Date;
   updatedAt: Date;
+  version: Version;
 }>;
 
 const MAX_NAME_LENGTH = 160;
@@ -148,6 +155,7 @@ export class Organization {
         status: 'active',
         createdAt,
         updatedAt: copyDate(createdAt),
+        version: UNSAVED,
       }),
     );
   }
@@ -158,7 +166,8 @@ export class Organization {
     if (
       !ORGANIZATION_STATUSES.includes(input.status) ||
       !validDate(input.createdAt) ||
-      !validDate(input.updatedAt)
+      !validDate(input.updatedAt) ||
+      !isStoredVersion(input.version)
     ) {
       return err(
         invalid('organization state is invalid', 'organization.invalid_state'),
@@ -188,6 +197,7 @@ export class Organization {
         status: input.status,
         createdAt: copyDate(input.createdAt),
         updatedAt: copyDate(input.updatedAt),
+        version: input.version,
       }),
     );
   }
@@ -214,6 +224,16 @@ export class Organization {
 
   get updatedAt(): Date {
     return copyDate(this.state.updatedAt);
+  }
+
+  /** The optimistic-concurrency token this state was loaded at. */
+  get version(): Version {
+    return this.state.version;
+  }
+
+  /** This state as storage holds it after a successful write. */
+  saved(): Organization {
+    return new Organization({ ...this.state, version: this.state.version + 1 });
   }
 
   rename(
@@ -313,6 +333,7 @@ export class Organization {
       status: patch.status ?? this.state.status,
       createdAt: copyDate(patch.createdAt ?? this.state.createdAt),
       updatedAt: copyDate(patch.updatedAt ?? this.state.updatedAt),
+      version: this.state.version,
     });
   }
 }

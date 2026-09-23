@@ -69,7 +69,7 @@ integration('NATS JetStream delivery', () => {
     if (!url) throw new Error('N2F_NATS_URL is required');
 
     const suffix = Date.now().toString(36);
-    const stream = process.env.N2F_NATS_STREAM ?? 'signals';
+    const stream = process.env.N2F_NATS_STREAM ?? 'n2f_events';
     const subjectPrefix = process.env.N2F_NATS_SUBJECT_PREFIX;
     const opened = await Broker.open({
       url: new SecretString(url),
@@ -78,6 +78,7 @@ integration('NATS JetStream delivery', () => {
       consumer: `retry_${suffix}`,
       timeoutMs: 2000,
       consumerDeliverPolicy: 'new',
+      nakDelayMs: 200,
     });
     expect(opened.ok).toBe(true);
     if (!opened.ok) return;
@@ -96,8 +97,8 @@ integration('NATS JetStream delivery', () => {
       const rejected = await broker.transfer(failing);
       expect(rejected.ok).toBe(false);
 
-      // The configured durable consumer waits one second before redelivery.
-      await delay(1100);
+      // A refused delivery is NAKed with a delay; JetStream redelivers after it.
+      await delay(400);
 
       let received: Envelope | undefined;
       const successful: Publisher = {
@@ -111,6 +112,7 @@ integration('NATS JetStream delivery', () => {
       expect(delivered).toEqual(ok(true));
       expect(received?.id).toBe(event.id);
     } finally {
+      await broker.removeConsumer();
       await broker.close();
     }
   });
@@ -120,7 +122,7 @@ integration('NATS JetStream delivery', () => {
     if (!url) throw new Error('N2F_NATS_URL is required');
 
     const suffix = Date.now().toString(36);
-    const stream = process.env.N2F_NATS_STREAM ?? 'signals';
+    const stream = process.env.N2F_NATS_STREAM ?? 'n2f_events';
     const subjectPrefix = process.env.N2F_NATS_SUBJECT_PREFIX;
     const opened = await Broker.open({
       url: new SecretString(url),
@@ -155,6 +157,7 @@ integration('NATS JetStream delivery', () => {
       const replayed = await publisher.publish(event);
       expect(replayed).toEqual(ok({ eventId: event.id, durable: true }));
     } finally {
+      await broker.removeConsumer();
       await broker.close();
     }
   });

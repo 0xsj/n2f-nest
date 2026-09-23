@@ -5,6 +5,7 @@ export const IDENTITY_EVENT_TYPES = Object.freeze({
   sessionRevoked: 'identity.session.revoked.v1',
   verificationChallengeIssued: 'identity.verification.challenge.issued.v1',
   verified: 'identity.verified.v1',
+  passwordReset: 'identity.password.reset.v1',
 } as const);
 
 export type IdentityEventType =

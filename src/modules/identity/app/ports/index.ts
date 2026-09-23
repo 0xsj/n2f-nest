@@ -30,5 +30,10 @@ export type {
   SessionTokenIssuer,
   SessionTokenMaterial,
 } from './session-token-issuer.js';
-export type { SessionWriter } from './session-writer.js';
+export type { SessionEviction, SessionWriter } from './session-writer.js';
+export type { SessionActivityWriter } from './session-activity-writer.js';
+export type { ActiveSessionReader } from './active-session-reader.js';
+export type { SessionPruner } from './session-pruner.js';
 export type { SessionRevocationWriter } from './session-revocation-writer.js';
+export type { IdentityMailer } from './identity-mailer.js';
+export type { PasswordResetWriter } from './password-reset-writer.js';

@@ -168,6 +168,7 @@ describe('Organization PostgreSQL adapter contract', () => {
         organization_status: organization.status,
         organization_created_at: organization.createdAt,
         organization_updated_at: organization.updatedAt,
+        organization_version: 1,
         membership_id: owner.id,
         membership_identity_id: owner.identityId,
         membership_role: owner.role,
@@ -175,6 +176,7 @@ describe('Organization PostgreSQL adapter contract', () => {
         membership_created_at: owner.createdAt,
         membership_updated_at: owner.updatedAt,
         membership_revoked_at: owner.revokedAt,
+        membership_version: 1,
       },
     ]);
 
@@ -224,6 +226,7 @@ describe('Organization PostgreSQL adapter contract', () => {
         created_at: membership.value.createdAt,
         updated_at: membership.value.updatedAt,
         revoked_at: membership.value.revokedAt,
+        version: 1,
       },
     ]);
     const invitationDatabase = new DatabaseSpy([
@@ -238,6 +241,7 @@ describe('Organization PostgreSQL adapter contract', () => {
         expires_at: invitation.value.expiresAt,
         accepted_at: invitation.value.acceptedAt,
         revoked_at: invitation.value.revokedAt,
+        version: 1,
       },
     ]);
 

@@ -41,15 +41,24 @@ the Nest application shutdown lifecycle.
 
 ## Event delivery in PostgreSQL mode
 
-Identity writes state and outbox rows transactionally. `OutboxWorker` claims
-one event at a time through the shared outbox store and hands it to the
-`DURABLE_EVENT_PUBLISHER` token. Local transport forwards to the in-process
-event bus and returns a durable receipt only after subscribers complete. NATS
-transport publishes to JetStream and returns its server acknowledgement;
-`NatsEventWorker` separately transfers messages into local subscribers and
-acknowledges JetStream only after those subscribers complete. Audit itself uses
-PostgreSQL in this mode, and duplicate delivery remains safe because the
-projection is idempotent by event ID.
+Every module writes state and outbox rows transactionally. `OutboxWorker`
+claims one event at a time through the shared outbox store and hands it to the
+`DURABLE_EVENT_PUBLISHER` token. Local transport hands it straight to
+`EventDelivery`, which records it in the PostgreSQL inbox for every consumer.
+NATS transport publishes to JetStream; `NatsEventWorker` moves each delivery
+into the same inbox and acknowledges JetStream as soon as the inbox holds it.
+Consumers then run from the inbox (see [platform events](../events/README.md)),
+so no subscriber work holds an outbox lease or a JetStream acknowledgement.
+
+A failed outbox publish retries with exponential backoff and becomes `dead`
+after `DEFAULT_RETRY.maxAttempts`; a row whose envelope no longer decodes is
+quarantined as `dead` (`last_error = events.undecodable`) instead of blocking
+the queue. JetStream deliveries the inbox refuses are NAKed with a delay; an
+undecodable message is terminated. `bun run events:requeue` returns dead rows.
+
+`EventMaintenance` deletes sent outbox rows and fully processed inbox events
+older than `N2F_EVENT_RETENTION_HOURS` (default 168) every ten minutes, in
+batches, from every process. Dead rows are kept for requeueing.
 
 Both workers retain their polling promise and await it during module shutdown.
 Cancellation interrupts the backoff timer, while an in-flight dispatch or
@@ -64,10 +73,12 @@ successful connection, the broker keeps reconnecting with a bounded backoff;
 readiness remains unavailable until the JetStream ping succeeds again.
 
 `N2F_NATS_STREAM` defaults to the local `n2f_events` stream and
-`N2F_NATS_SUBJECT_PREFIX` defaults to `n2f.events.`. A legacy deployment can
-temporarily use `N2F_NATS_STREAM=signals` and
-`N2F_NATS_SUBJECT_PREFIX=signals.events.` during rollback or compatibility
-work.
+`N2F_NATS_SUBJECT_PREFIX` defaults to `n2f.events.`. The stream keeps messages
+for `N2F_NATS_STREAM_MAX_AGE_HOURS` (default 168) within
+`N2F_NATS_STREAM_MAX_MB` (default 64) and discards the oldest at either bound,
+so a full stream never refuses new events. Provisioning updates an existing
+stream and durable consumer to these settings; JetStream reserves `max_bytes`
+from the account's storage, so size it to the deployment. Both are configurable for deployments that need their own names.
 
 ## Real database verification
 

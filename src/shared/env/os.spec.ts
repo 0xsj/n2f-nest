@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import { os } from './index.js';
 
 it('captures the process environment once', () => {
-  const key = 'SIGNALS_ENV_SNAPSHOT_FIXTURE';
+  const key = 'N2F_ENV_SNAPSHOT_FIXTURE';
   const previous = process.env[key];
   try {
     process.env[key] = 'before';

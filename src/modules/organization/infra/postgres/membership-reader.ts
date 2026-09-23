@@ -19,6 +19,7 @@ type MembershipRow = {
   created_at: Date;
   updated_at: Date;
   revoked_at: Date | null;
+  version: number;
 };
 
 function storedId(value: unknown): Result<ID, Failure> {
@@ -49,6 +50,7 @@ function membershipFrom(row: MembershipRow): Result<Membership, Failure> {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     revokedAt: row.revoked_at,
+    version: row.version,
   });
 }
 
@@ -60,7 +62,7 @@ export class PostgresMembershipReader implements MembershipReader {
     signal?: AbortSignal,
   ): Promise<Result<Membership | null, Failure>> {
     return this.read(
-      `SELECT id,organization_id,identity_id,role,status,created_at,updated_at,revoked_at
+      `SELECT id,organization_id,identity_id,role,status,created_at,updated_at,revoked_at,version
          FROM public.n2f_organization_memberships
         WHERE id=$1::uuid`,
       [membershipId],
@@ -74,7 +76,7 @@ export class PostgresMembershipReader implements MembershipReader {
     signal?: AbortSignal,
   ): Promise<Result<Membership | null, Failure>> {
     return this.read(
-      `SELECT id,organization_id,identity_id,role,status,created_at,updated_at,revoked_at
+      `SELECT id,organization_id,identity_id,role,status,created_at,updated_at,revoked_at,version
          FROM public.n2f_organization_memberships
         WHERE organization_id=$1::uuid AND identity_id=$2::uuid AND status='active'`,
       [organizationId, identityId],
@@ -88,7 +90,7 @@ export class PostgresMembershipReader implements MembershipReader {
     signal?: AbortSignal,
   ): Promise<Result<Membership | null, Failure>> {
     return this.read(
-      `SELECT id,organization_id,identity_id,role,status,created_at,updated_at,revoked_at
+      `SELECT id,organization_id,identity_id,role,status,created_at,updated_at,revoked_at,version
          FROM public.n2f_organization_memberships
         WHERE organization_id=$1::uuid AND identity_id=$2::uuid`,
       [organizationId, identityId],

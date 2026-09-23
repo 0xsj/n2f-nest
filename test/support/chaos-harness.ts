@@ -7,7 +7,10 @@ import {
   FaultInjector,
 } from '../../src/platform/chaos/index.js';
 import { EVENT_BUS } from '../../src/platform/events/event-bus.js';
-import { InMemoryEventBus } from '../../src/platform/events/in-memory-event-bus.js';
+import {
+  EVENT_RETRY_POLICY,
+  EventDelivery,
+} from '../../src/platform/events/event-delivery.js';
 
 export type ChaosApplication = Readonly<{
   app: INestApplication;
@@ -22,10 +25,12 @@ export async function createChaosApplication(): Promise<ChaosApplication> {
   })
     .overrideProvider(EVENT_BUS)
     .useFactory({
-      inject: [InMemoryEventBus],
-      factory: (delegate: InMemoryEventBus) =>
-        new ChaosEventBus(delegate, faults),
+      inject: [EventDelivery],
+      factory: (delegate: EventDelivery) => new ChaosEventBus(delegate, faults),
     })
+    // Retry quickly so recovery is observable within a test.
+    .overrideProvider(EVENT_RETRY_POLICY)
+    .useValue({ maxAttempts: 5, baseMs: 20, maxMs: 200 })
     .compile();
 
   const app = module.createNestApplication();

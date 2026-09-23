@@ -1,18 +1,8 @@
 import { readFileSync } from 'node:fs';
 import type { Migration } from '../../../../shared/postgres/index.js';
 
-export const migration = (version: number): Migration => ({
+/** This module's baseline schema; see migrations/baseline.sql. */
+export const baselineMigration = (version: number): Migration => ({
   version,
-  sql: readFileSync(
-    new URL('./migrations/0010_jobs.sql', import.meta.url),
-    'utf8',
-  ),
-});
-
-export const subjectMigration = (version: number): Migration => ({
-  version,
-  sql: readFileSync(
-    new URL('./migrations/0011_job_subject.sql', import.meta.url),
-    'utf8',
-  ),
+  sql: readFileSync(new URL('./migrations/baseline.sql', import.meta.url), 'utf8'),
 });

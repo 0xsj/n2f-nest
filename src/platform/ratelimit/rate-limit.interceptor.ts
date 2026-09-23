@@ -54,26 +54,23 @@ export class RateLimitInterceptor implements NestInterceptor {
     context: ExecutionContext,
     next: CallHandler,
   ): Observable<unknown> {
-    const policy = this.reflector.getAllAndOverride<HttpRateLimitPolicy>(
-      RATE_LIMIT_POLICY,
-      [context.getHandler(), context.getClass()],
-    );
-    if (!policy) return next.handle();
+    const policies = this.reflector.getAllAndOverride<
+      readonly HttpRateLimitPolicy[]
+    >(RATE_LIMIT_POLICY, [context.getHandler(), context.getClass()]);
+    if (!policies?.length) return next.handle();
 
     const request = context.switchToHttp().getRequest<Request>();
     const response = context.switchToHttp().getResponse<Response>();
-    return from(
-      this.limiter.consume(`${policy.name}:${policy.key(request)}`, policy),
-    ).pipe(
-      mergeMap((result) => {
-        if (!result.ok) throw failureResponse(result.error);
+    return from(this.#consume(policies, request)).pipe(
+      mergeMap((outcome) => {
+        if (!outcome.ok) throw failureResponse(outcome.error);
 
-        writeHeaders(response, result.value);
-        if (!result.value.allowed) {
+        writeHeaders(response, outcome.value.decision);
+        if (!outcome.value.decision.allowed) {
           throw failureResponse(
             failure('rate_limited', 'request rate limit exceeded', {
               type: 'rate_limit.exceeded',
-              fields: { policy: policy.name },
+              fields: { policy: outcome.value.policy },
             }),
           );
         }
@@ -81,5 +78,29 @@ export class RateLimitInterceptor implements NestInterceptor {
         return next.handle();
       }),
     );
+  }
+
+  /**
+   * Consume each policy until one refuses. The reported decision is the
+   * refusal, or otherwise the policy with the fewest requests remaining.
+   */
+  async #consume(
+    policies: readonly HttpRateLimitPolicy[],
+    request: Request,
+  ): Promise<Result<{ policy: string; decision: RateLimitDecision }, Failure>> {
+    let tightest: { policy: string; decision: RateLimitDecision } | undefined;
+    for (const policy of policies) {
+      const result = await this.limiter.consume(
+        `${policy.name}:${policy.key(request)}`,
+        policy,
+      );
+      if (!result.ok) return result;
+      const current = { policy: policy.name, decision: result.value };
+      if (!result.value.allowed) return { ok: true, value: current };
+      if (!tightest || result.value.remaining < tightest.decision.remaining) {
+        tightest = current;
+      }
+    }
+    return { ok: true, value: tightest! };
   }
 }

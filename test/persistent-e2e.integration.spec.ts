@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { Client } from 'pg';
+import { mailbox, verificationFrom } from './support/mail.js';
+import { resetLoopbackRateLimits } from './support/rate-limits.js';
 
 const enabled = process.env.N2F_RUN_PERSISTENT_E2E === '1';
 const integration = enabled ? describe : describe.skip;
@@ -28,21 +29,6 @@ async function jsonRequest(
   return { status: response.status, body };
 }
 
-async function resetRegistrationRateLimits(): Promise<void> {
-  const databaseUrl = process.env.N2F_DATABASE_URL;
-  if (!databaseUrl) return;
-
-  const client = new Client({ connectionString: databaseUrl });
-  try {
-    await client.connect();
-    await client.query(
-      `DELETE FROM public.n2f_rate_limits
-       WHERE bucket_key LIKE 'identity.register:%'`,
-    );
-  } finally {
-    await client.end();
-  }
-}
 
 function postJson(path: string, body: unknown, token?: string): Promise<JsonResponse> {
   return jsonRequest(path, {
@@ -74,7 +60,7 @@ async function eventually<T>(
 
 integration('Persistent HTTP E2E', () => {
   it('completes the cross-domain workflow through the running backend', async () => {
-    await resetRegistrationRateLimits();
+    await resetLoopbackRateLimits();
 
     const email = `persistent-e2e-${randomUUID()}@example.com`;
     const password = 'correct-horse-7';
@@ -128,29 +114,23 @@ integration('Persistent HTTP E2E', () => {
     );
 
     const registered = await postJson('/identity/register', { email, password });
-    expect(registered.status).toBe(201);
-    expect(registered.body.status).toBe('pending_verification');
+    expect(registered.status).toBe(202);
 
+    // A second sign-up answers exactly like the first (hardening item S2).
     const duplicateRegistration = await postJson('/identity/register', {
       email,
       password,
     });
-    expect(duplicateRegistration.status).toBe(409);
+    expect(duplicateRegistration).toEqual(registered);
 
-    const identityId = registered.body.identityId as string;
-    const challenge = await postJson('/identity/verification-challenges', {
-      identityId,
-    });
-    expect(challenge.status).toBe(201);
-
-    const verified = await postJson('/identity/verify', {
-      challengeId: challenge.body.challengeId,
-      token: challenge.body.token,
-    });
+    const mail = await jsonRequest(mailbox(email));
+    expect(mail.status).toBe(200);
+    const verified = await postJson('/identity/verify', verificationFrom(mail.body));
     expect(verified).toEqual({
       status: 201,
-      body: { identityId, status: 'active' },
+      body: { identityId: expect.any(String), status: 'active' },
     });
+    const identityId = verified.body.identityId as string;
 
     const invalidLogin = await postJson('/identity/login', {
       email,
@@ -305,22 +285,15 @@ integration('Persistent HTTP E2E', () => {
       email: memberEmail,
       password: memberPassword,
     });
-    expect(memberRegistered.status).toBe(201);
+    expect(memberRegistered.status).toBe(202);
 
-    const memberIdentityId = memberRegistered.body.identityId as string;
-    const memberChallenge = await postJson('/identity/verification-challenges', {
-      identityId: memberIdentityId,
-    });
-    expect(memberChallenge.status).toBe(201);
-
-    const memberVerified = await postJson('/identity/verify', {
-      challengeId: memberChallenge.body.challengeId,
-      token: memberChallenge.body.token,
-    });
+    const memberMail = await jsonRequest(mailbox(memberEmail));
+    const memberVerified = await postJson('/identity/verify', verificationFrom(memberMail.body));
     expect(memberVerified).toEqual({
       status: 201,
-      body: { identityId: memberIdentityId, status: 'active' },
+      body: { identityId: expect.any(String), status: 'active' },
     });
+    const memberIdentityId = memberVerified.body.identityId as string;
 
     const invitation = await postJson(
       `/organizations/${organizationId}/invitations`,
@@ -437,39 +410,35 @@ integration('Persistent HTTP E2E', () => {
     expect(revoked.status).toBe(401);
     expect(revoked.body.code).toBe('session.revoked');
 
-    const expectedEventTypes = [
-      'identity.registered.v1',
-      'identity.verification.challenge.issued.v1',
-      'identity.verified.v1',
-      'identity.session.created.v1',
-      'identity.session.revoked.v1',
-      'organization.created.v1',
-      'organization.membership.added.v1',
-      'document.created.v1',
-      'document.archived.v1',
+    // Audit files each event under the aggregate its module names on the
+    // envelope: Identity's events under the identity, the rest under their
+    // organization, membership or document.
+    type Entry = { eventType?: string; subject?: { kind?: string; id?: string } };
+    const expectedSubjects: ReadonlyArray<readonly [string, string, string]> = [
+      ['identity.registered.v1', 'identity', identityId],
+      ['identity.verification.challenge.issued.v1', 'identity', identityId],
+      ['identity.verified.v1', 'identity', identityId],
+      ['identity.session.created.v1', 'identity', identityId],
+      ['identity.session.revoked.v1', 'identity', identityId],
+      ['organization.created.v1', 'organization', organizationId],
+      ['organization.membership.added.v1', 'membership', organization.body.ownerMembershipId],
+      ['document.created.v1', 'document', documentId],
+      ['document.archived.v1', 'document', documentId],
     ];
     const audit = await eventually(
       async () => jsonRequest('/audit/entries'),
       (response) =>
         response.status === 200 &&
-        expectedEventTypes.every((eventType) =>
-          response.body.some(
-            (entry: { eventType?: string; subject?: { id?: string } }) =>
+        expectedSubjects.every(([eventType, kind, id]) =>
+          (response.body as Entry[]).some(
+            (entry) =>
               entry.eventType === eventType &&
-              entry.subject?.id === identityId,
+              entry.subject?.kind === kind &&
+              entry.subject.id === id,
           ),
         ),
     );
-
-    const identityAudit = audit.body.filter(
-      (entry: { subject?: { id?: string } }) => entry.subject?.id === identityId,
-    );
-    const identityEventTypes = identityAudit.map(
-      (entry: { eventType: string }) => entry.eventType,
-    );
-    for (const eventType of expectedEventTypes) {
-      expect(identityEventTypes).toContain(eventType);
-    }
+    expect(audit.status).toBe(200);
 
     const workflowAudit = await eventually(
       async () => jsonRequest('/audit/entries'),
@@ -494,32 +463,25 @@ integration('Persistent HTTP E2E', () => {
       ),
     ).toHaveLength(2);
 
-    const memberEventTypes = [
-      'organization.invitation.created.v1',
-      'organization.invitation.accepted.v1',
-      'organization.membership.added.v1',
-      'organization.membership.revoked.v1',
+    const memberSubjects: ReadonlyArray<readonly [string, string, string]> = [
+      ['organization.invitation.created.v1', 'invitation', invitation.body.invitationId],
+      ['organization.invitation.accepted.v1', 'invitation', invitation.body.invitationId],
+      ['organization.membership.added.v1', 'membership', accepted.body.membershipId],
+      ['organization.membership.revoked.v1', 'membership', accepted.body.membershipId],
     ];
     const memberAudit = await eventually(
       async () => jsonRequest('/audit/entries'),
       (response) =>
         response.status === 200 &&
-        memberEventTypes.every((eventType) =>
-          response.body.some(
-            (entry: { eventType?: string; subject?: { id?: string } }) =>
+        memberSubjects.every(([eventType, kind, id]) =>
+          (response.body as Entry[]).some(
+            (entry) =>
               entry.eventType === eventType &&
-              entry.subject?.id === memberIdentityId,
+              entry.subject?.kind === kind &&
+              entry.subject.id === id,
           ),
         ),
     );
-    const observedMemberEventTypes = memberAudit.body
-      .filter(
-        (entry: { eventType?: string; subject?: { id?: string } }) =>
-          entry.subject?.id === memberIdentityId,
-      )
-      .map((entry: { eventType: string }) => entry.eventType);
-    for (const eventType of memberEventTypes) {
-      expect(observedMemberEventTypes).toContain(eventType);
-    }
+    expect(memberAudit.status).toBe(200);
   }, 15000);
 });

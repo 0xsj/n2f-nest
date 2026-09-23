@@ -13,11 +13,14 @@ export {
   CompleteDocumentProcessing,
   FailDocumentProcessing,
   ProcessDocument,
+  RetryDocumentProcessing,
   type ProcessDocumentCommand,
   type ProcessDocumentDependencies,
   type ProcessDocumentResult,
 } from './commands/index.js';
 export {
+  CheckDocumentProcessable,
+  type CheckDocumentProcessableQuery,
   GetDocument,
   type GetDocumentDependencies,
   type GetDocumentQuery,

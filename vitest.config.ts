@@ -9,5 +9,8 @@ export default defineConfig({
     globals: true,
     root: './',
     include: ['**/*.spec.ts'],
+    // Integration suites drive registration through the development-only
+    // verification-token endpoint and read the global audit listing.
+    env: { N2F_DEV_ENDPOINTS: 'true' },
   },
 });

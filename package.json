@@ -8,20 +8,20 @@
   "type": "module",
   "scripts": {
     "build": "nest build",
-    "deploy": "nest deploy",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "lint": "bun run check:architecture && oxlint src/ test/",
-    "check:architecture": "bun run scripts/check-error-boundaries.ts",
+    "check:architecture": "bun run scripts/check-error-boundaries.ts && bun run scripts/check-module-boundaries.ts",
     "check": "bun run build && bun run lint && bun run test",
+    "events:requeue": "bun run scripts/events-requeue.ts",
     "test": "vitest run",
     "test:organization": "N2F_RUN_ORGANIZATION_INTEGRATION=1 bun run test test/organization.integration.spec.ts",
     "test:identity": "N2F_RUN_IDENTITY_INTEGRATION=1 bun run test test/identity.integration.spec.ts",
     "test:chaos": "N2F_RUN_CHAOS_INTEGRATION=1 bun run test test/chaos.integration.spec.ts",
-    "test:postgres": "N2F_RUN_POSTGRES_INTEGRATION=1 N2F_STORAGE=postgres N2F_EVENT_TRANSPORT=local vitest run test/postgres.integration.spec.ts",
+    "test:postgres": "N2F_RUN_POSTGRES_INTEGRATION=1 N2F_STORAGE=postgres N2F_EVENT_TRANSPORT=local vitest run test/postgres.integration.spec.ts src/modules/*/infra/adapters.contract.spec.ts src/shared/events/inbox.contract.spec.ts src/shared/postgres/migration.integration.spec.ts test/migration-baseline.integration.spec.ts",
     "test:nats": "N2F_RUN_POSTGRES_INTEGRATION=1 N2F_RUN_NATS_INTEGRATION=1 N2F_STORAGE=postgres N2F_EVENT_TRANSPORT=nats N2F_NATS_STREAM=n2f_events N2F_NATS_SUBJECT_PREFIX=n2f.events. vitest run --no-file-parallelism test/postgres.integration.spec.ts src/shared/events/nats/broker.integration.spec.ts",
     "test:recovery": "N2F_RUN_RECOVERY_INTEGRATION=1 vitest run --no-file-parallelism test/outbox-recovery.integration.spec.ts",
     "test:audit-redelivery": "N2F_RUN_AUDIT_REDELIVERY=1 vitest run --no-file-parallelism test/audit-redelivery.integration.spec.ts",
@@ -37,6 +37,7 @@
     "@nestjs/common": "^12.0.1",
     "@nestjs/core": "^12.0.1",
     "@nestjs/platform-express": "^12.0.1",
+    "nodemailer": "^10",
     "pg": "8.23.0",
     "pino": "10.3.1",
     "reflect-metadata": "^0.2.2",
@@ -45,9 +46,10 @@
   },
   "devDependencies": {
     "@nestjs/cli": "^12.0.0",
-    "@nestjs/mau": "^0.2.6",
     "@nestjs/schematics": "^12.0.0",
     "@nestjs/testing": "^12.0.1",
+    "@stryker-mutator/core": "^10.0.0",
+    "@stryker-mutator/vitest-runner": "^10.0.0",
     "@types/express": "^5.0.0",
     "@types/node": "^24.0.0",
     "@types/pg": "8.15.5",
@@ -60,5 +62,8 @@
     "typescript": "^6.0.2",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^4.1.2"
+  },
+  "overrides": {
+    "qs": "^6.16.0"
   }
 }

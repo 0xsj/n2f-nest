@@ -19,13 +19,20 @@ import { MetricsRegistry } from '../../shared/metrics/index.js';
 import { METRICS } from '../metrics/metrics.tokens.js';
 import { RequestContext } from './request-context.js';
 
-function requestId(value: string | undefined): ID {
-  const parsed = parse(value);
-  if (parsed.ok) return parsed.value;
-
+/**
+ * Request IDs are always generated here. They become the work ID recorded in
+ * provenance, events and audit entries, so a client must not choose them; a
+ * client's own correlation ID is echoed back and logged, never trusted.
+ */
+function requestId(): ID {
   const generated = parse(randomUUID());
   if (!generated.ok) throw new Error('generated request ID was invalid');
   return generated.value;
+}
+
+function clientRequestId(value: string | undefined): ID | undefined {
+  const parsed = parse(value);
+  return parsed.ok ? parsed.value : undefined;
 }
 
 function requestTrace(value: string | undefined): TraceRef {
@@ -40,7 +47,7 @@ function requestTrace(value: string | undefined): TraceRef {
   return created.value;
 }
 
-/** Logs request completion without inspecting bodies, cookies or credentials. */
+/** Logs request completion without inspecting bodies, query strings, cookies or credentials. */
 @Injectable()
 export class RequestLoggerMiddleware implements NestMiddleware {
   private readonly logger = new Logger('HTTP');
@@ -52,12 +59,14 @@ export class RequestLoggerMiddleware implements NestMiddleware {
 
   use(request: Request, response: Response, next: NextFunction): void {
     const started = process.hrtime.bigint();
-    const id = requestId(request.header('x-request-id'));
+    const id = requestId();
+    const clientId = clientRequestId(request.header('x-request-id'));
     const trace = requestTrace(request.header('traceparent'));
     let completed = false;
     this.metrics.add('n2f_http_active_requests', {}, 1);
 
     response.setHeader('x-request-id', id);
+    if (clientId) response.setHeader('x-client-request-id', clientId);
     response.setHeader('traceparent', formatTraceparent(trace));
 
     const finish = (termination: 'completed' | 'closed'): void => {
@@ -92,6 +101,7 @@ export class RequestLoggerMiddleware implements NestMiddleware {
       this.logger.log(
         `${request.method} ${request.path} ${status} ${durationMs.toFixed(1)}ms ` +
           `termination=${termination} request_id=${id} ` +
+          (clientId ? `client_request_id=${clientId} ` : '') +
           `trace_id=${snapshot(trace).traceId} span_id=${snapshot(trace).spanId}`,
       );
     };

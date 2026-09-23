@@ -17,12 +17,31 @@ export {
   type RevokeSessionResult,
 } from './commands/index.js';
 export {
+  ConfirmPasswordReset,
+  RequestPasswordReset,
+  type ConfirmPasswordResetCommand,
+  type RequestPasswordResetCommand,
+} from './commands/index.js';
+export {
+  ResendVerification,
+  SignUp,
+  type ResendVerificationCommand,
+  type SignUpCommand,
+  type SignUpResult,
+} from './commands/index.js';
+export {
+  PruneSessions,
+  type PruneSessionsCommand,
+  type PruneSessionsDependencies,
+} from './commands/index.js';
+export {
   VerifyIdentity,
   type VerifyIdentityCommand,
   type VerifyIdentityDependencies,
   type VerifyIdentityResult,
 } from './commands/index.js';
 export type {
+  IdentityMailer,
   PasswordHasher,
   PasswordPolicy,
   RegistrationWriter,

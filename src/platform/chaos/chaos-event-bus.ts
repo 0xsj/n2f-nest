@@ -16,15 +16,15 @@ export class ChaosEventBus implements EventBus {
     private readonly faults: FaultInjector,
   ) {}
 
-  subscribe(subscriber: EventSubscriber): () => void {
-    return this.delegate.subscribe(async (event, signal) => {
-      const before = await this.faults.hit('event.consume.before', signal);
+  subscribe(consumer: string, subscriber: EventSubscriber): () => void {
+    return this.delegate.subscribe(consumer, async (event, signal) => {
+      const before = await this.faults.hit('event.consume.before', signal, { consumer });
       if (!before.ok) return before;
 
       const result = await subscriber(event, signal);
       if (!result.ok) return result;
 
-      const after = await this.faults.hit('event.consume.after', signal);
+      const after = await this.faults.hit('event.consume.after', signal, { consumer });
       return after.ok ? after : err(after.error);
     });
   }

@@ -6,9 +6,15 @@ import {
   type Result,
 } from '../../../shared/errors/index.js';
 import type { ID } from '../../../shared/id/index.js';
+import {
+  UNSAVED,
+  isStoredVersion,
+  type Version,
+} from '../../../shared/version/index.js';
 
 export const VERIFICATION_PURPOSES = Object.freeze([
   'email_verification',
+  'password_reset',
 ] as const);
 
 export type VerificationPurpose = (typeof VERIFICATION_PURPOSES)[number];
@@ -50,6 +56,7 @@ export type RestoreVerificationChallengeInput = Readonly<{
   issuedAt: Date;
   expiresAt: Date;
   consumedAt: Date | null;
+  version: Version;
 }>;
 
 type VerificationChallengeState = Readonly<{
@@ -60,6 +67,7 @@ type VerificationChallengeState = Readonly<{
   issuedAt: Date;
   expiresAt: Date;
   consumedAt: Date | null;
+  version: Version;
 }>;
 
 function validDate(value: Date): boolean {
@@ -115,6 +123,7 @@ export class VerificationChallenge {
         issuedAt,
         expiresAt,
         consumedAt: null,
+        version: UNSAVED,
       }),
     );
   }
@@ -127,7 +136,8 @@ export class VerificationChallenge {
       !VERIFICATION_STATUSES.includes(input.status) ||
       !validDate(input.issuedAt) ||
       !validDate(input.expiresAt) ||
-      (input.consumedAt !== null && !validDate(input.consumedAt))
+      (input.consumedAt !== null && !validDate(input.consumedAt)) ||
+      !isStoredVersion(input.version)
     ) {
       return err(
         invalid(
@@ -171,6 +181,7 @@ export class VerificationChallenge {
         expiresAt: copyDate(input.expiresAt),
         consumedAt:
           input.consumedAt === null ? null : copyDate(input.consumedAt),
+        version: input.version,
       }),
     );
   }
@@ -203,6 +214,16 @@ export class VerificationChallenge {
     return this.state.consumedAt === null
       ? null
       : copyDate(this.state.consumedAt);
+  }
+
+  /** The optimistic-concurrency token this state was loaded at. */
+  get version(): Version {
+    return this.state.version;
+  }
+
+  /** This state as storage holds it after a successful write. */
+  saved(): VerificationChallenge {
+    return new VerificationChallenge({ ...this.state, version: this.state.version + 1 });
   }
 
   consume(at: Date): Result<VerificationChallenge, VerificationFailure> {

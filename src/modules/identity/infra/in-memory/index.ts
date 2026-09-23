@@ -1,5 +1,9 @@
 export { InMemoryIdentityStore } from './store.js';
 export {
+  InMemoryActiveSessionReader,
+  InMemoryPasswordResetWriter,
+  InMemorySessionActivityWriter,
+  InMemorySessionPruner,
   InMemoryCredentialAuthenticatorReader,
   InMemoryCurrentSessionReader,
   InMemoryIdentityReader,
@@ -14,6 +18,7 @@ export {
 export { NodePasswordCodec, NodeTokenCodec } from './crypto.js';
 export {
   DefaultPasswordPolicy,
+  DefaultPasswordResetPolicy,
   DefaultSessionPolicy,
   DefaultVerificationPolicy,
 } from './policy.js';

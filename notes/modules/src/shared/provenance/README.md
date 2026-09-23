@@ -4,7 +4,7 @@ Provenance records execution attribution and causality across local work,
 messages and retries. It is a shared value model, not an authorization service,
 transport codec, tracing SDK or durable audit store.
 
-- [First slice](first-slice.md): scope and the Signals-specific additions.
+- [First slice](first-slice.md): scope and the additions made for this backend.
 - [Language walkthrough](language-walkthrough.md): branded values, ownership,
   immutable snapshots and transition helpers.
 

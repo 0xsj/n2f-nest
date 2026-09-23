@@ -150,9 +150,17 @@ integration('PostgreSQL outbox recovery', () => {
       expect((await publisherBroker.provision()).ok).toBe(true);
       expect((await subscriberBroker.provision()).ok).toBe(true);
 
-      const queued = await database.transaction((transaction) =>
-        enqueue(transaction, event),
-      );
+      // Make the fixture the oldest due row so the dispatcher claims it, not
+      // an unrelated row left pending in a shared development database.
+      const queued = await database.transaction(async (transaction) => {
+        const enqueued = await enqueue(transaction, event);
+        if (!enqueued.ok) return enqueued;
+        await transaction.query(
+          "UPDATE public.n2f_outbox SET available_at=clock_timestamp()-interval '100 years' WHERE event_id=$1::uuid",
+          [event.id],
+        );
+        return enqueued;
+      });
       expect(queued.ok).toBe(true);
 
       const uncertain = await dispatcher.dispatchOnce();
@@ -170,8 +178,19 @@ integration('PostgreSQL outbox recovery', () => {
         expect(afterUncertain.value).toEqual({ state: 'pending', attempts: 1 });
       }
 
-      await delay(150);
-      const recovered = await dispatcher.dispatchOnce();
+      // The release scheduled a backoff. Skip it (keeping the fixture the
+      // oldest due row) and poll until the retry dispatches.
+      await database.transaction(async (transaction) => {
+        await transaction.query(
+          "UPDATE public.n2f_outbox SET available_at=clock_timestamp()-interval '100 years' WHERE event_id=$1::uuid",
+          [event.id],
+        );
+        return { ok: true, value: undefined } as const;
+      });
+      const recovered = await eventually(
+        () => dispatcher.dispatchOnce(),
+        (result) => result.ok && result.value,
+      );
       expect(recovered).toEqual({ ok: true, value: true });
 
       const afterRecovery = await database.transaction(async (transaction) => {
@@ -207,6 +226,8 @@ integration('PostgreSQL outbox recovery', () => {
         );
         return { ok: true, value: undefined } as const;
       });
+      await publisherBroker.removeConsumer();
+      await subscriberBroker.removeConsumer();
       await publisherBroker.close();
       await subscriberBroker.close();
       await database.close(5000);

@@ -65,6 +65,24 @@ That opaque subject is deliberate. Jobs may refer to a Document without
 importing the Document aggregate, which preserves the bounded-context seam and
 allows the worker side to be extracted later.
 
+## Open jobs and expiry
+
+A job is **open** while it is queued, running, or failed with attempts left
+(`Job.open`). At most one open job exists per organization, kind and subject:
+a partial unique index (`n2f_jobs_jobs_open_subject`) enforces it in
+PostgreSQL and the in-memory writer mirrors it. `SubmitWorkflowJob` ensures an
+open job: it returns a queued or running one, retries a failed one that has
+attempts left, or creates a new one when the subject has none. A succeeded,
+canceled or exhausted job therefore no longer blocks new work for its subject;
+before this, a document whose job ended could never be processed again.
+
+Nothing executes jobs in this boilerplate, so a job whose executor dies stays
+`running`. `JobExpiry` runs `ExpireStaleJobs` every minute: jobs running
+longer than `N2F_JOB_RUNNING_TIMEOUT_MINUTES` (default 60) fail with
+`job.timed_out`, an ordinary `job.failed` that consumers handle like any other
+and that a job with attempts left can retry from. Several processes may sweep
+at once; the version check lets only one fail a given job.
+
 ## Shared package review
 
 No new shared package was needed. Jobs reuses existing IDs, clocks, errors,

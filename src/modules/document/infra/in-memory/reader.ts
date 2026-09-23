@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ok, type Failure, type Result } from '../../../../shared/errors/index.js';
 import type { ID } from '../../../../shared/id/index.js';
+import { keysetPage, type After } from '../../../../shared/pagination/index.js';
 import type { DocumentReader } from '../../app/index.js';
 import type { Document } from '../../domain/index.js';
 import { InMemoryDocumentStore } from './store.js';
@@ -15,7 +16,14 @@ export class InMemoryDocumentReader implements DocumentReader {
 
   async listForOrganization(
     organizationId: ID,
+    page: Readonly<{ limit: number; after?: After }>,
   ): Promise<Result<readonly Document[], Failure>> {
-    return ok(this.store.documentsForOrganization(organizationId));
+    return ok(
+      keysetPage(
+        this.store.documentsForOrganization(organizationId),
+        (document) => ({ at: document.createdAt, id: document.id }),
+        page,
+      ),
+    );
   }
 }

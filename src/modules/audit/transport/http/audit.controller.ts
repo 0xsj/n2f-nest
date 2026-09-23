@@ -3,8 +3,15 @@ import {
   Get,
   HttpException,
   HttpStatus,
+  Inject,
 } from '@nestjs/common';
 import {
+  RUNTIME_CONFIG,
+  type RuntimeConfig,
+} from '../../../../platform/runtime/index.js';
+import {
+  err,
+  failure,
   publicInfo,
   type Failure,
   type Result,
@@ -23,10 +30,22 @@ function respond<T>(result: Result<T, Failure>): T {
 
 @Controller('audit')
 export class AuditController {
-  constructor(private readonly list: ListAuditEntries) {}
+  constructor(
+    private readonly list: ListAuditEntries,
+    @Inject(RUNTIME_CONFIG) private readonly config: RuntimeConfig,
+  ) {}
 
+  /**
+   * Lists every tenant's entries without authentication, so it exists only
+   * for development and integration checks.
+   */
   @Get('entries')
   async entries() {
+    if (!this.config.http.devEndpoints) {
+      respond(err(failure('not_found', 'resource not found', {
+        type: 'http.not_found',
+      })));
+    }
     const entries = respond(await this.list.execute());
     return entries.map((entry) => ({
       auditEntryId: entry.auditEntryId,

@@ -14,7 +14,12 @@ export type EventSubscriber = (
  * dispatcher without changing domain or application code.
  */
 export interface EventBus extends Publisher {
-  subscribe(subscriber: EventSubscriber): () => void;
+  /**
+   * Register a named consumer. Each consumer receives every event published
+   * after it subscribed, retries independently, and must be idempotent by
+   * event ID because delivery is at least once.
+   */
+  subscribe(consumer: string, subscriber: EventSubscriber): () => void;
 }
 
 export const EVENT_BUS = Symbol('platform.events.eventBus');

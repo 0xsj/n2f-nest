@@ -6,6 +6,11 @@ import {
   type Result,
 } from '../../../shared/errors/index.js';
 import { parse, type ID } from '../../../shared/id/index.js';
+import {
+  UNSAVED,
+  isStoredVersion,
+  type Version,
+} from '../../../shared/version/index.js';
 
 export const JOB_STATUSES = Object.freeze([
   'queued',
@@ -64,6 +69,7 @@ export type RestoreJobInput = Readonly<{
   startedAt: Date | null;
   finishedAt: Date | null;
   failureCode: string | null;
+  version: Version;
 }>;
 
 type JobState = Readonly<{
@@ -79,6 +85,7 @@ type JobState = Readonly<{
   startedAt: Date | null;
   finishedAt: Date | null;
   failureCode: string | null;
+  version: Version;
 }>;
 
 function validDate(value: Date): boolean {
@@ -185,6 +192,7 @@ export class Job {
         startedAt: null,
         finishedAt: null,
         failureCode: null,
+        version: UNSAVED,
       }),
     );
   }
@@ -207,7 +215,8 @@ export class Job {
       (input.startedAt !== null && !validDate(input.startedAt)) ||
       (input.finishedAt !== null && !validDate(input.finishedAt)) ||
       (input.failureCode !== null &&
-        !/^[a-z][a-z0-9_.-]{0,127}$/.test(input.failureCode))
+        !/^[a-z][a-z0-9_.-]{0,127}$/.test(input.failureCode)) ||
+      !isStoredVersion(input.version)
     ) {
       return err(invalid('job state is invalid', 'job.invalid_state'));
     }
@@ -259,8 +268,19 @@ export class Job {
         finishedAt:
           input.finishedAt === null ? null : copyDate(input.finishedAt),
         failureCode: input.failureCode,
+        version: input.version,
       }),
     );
+  }
+
+  /** The optimistic-concurrency token this state was loaded at. */
+  get version(): Version {
+    return this.state.version;
+  }
+
+  /** This state as storage holds it after a successful write. */
+  saved(): Job {
+    return new Job({ ...this.state, version: this.state.version + 1 });
   }
 
   get id(): ID {
@@ -302,6 +322,18 @@ export class Job {
   }
   get failureCode(): string | null {
     return this.state.failureCode;
+  }
+
+  /**
+   * Whether the job still has work ahead of it: queued, running, or failed
+   * with attempts left to retry. At most one open job may exist per subject.
+   */
+  get open(): boolean {
+    return (
+      this.status === 'queued' ||
+      this.status === 'running' ||
+      (this.status === 'failed' && this.attempts < this.maxAttempts)
+    );
   }
 
   start(at: Date): Result<Job, JobFailure> {

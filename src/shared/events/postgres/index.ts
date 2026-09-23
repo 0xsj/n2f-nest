@@ -2,8 +2,8 @@
 export {
   enqueue,
   Mailbox,
-  migration,
-  receiptsMigration,
+  baselineMigration,
   Store,
   type Lease,
+  type OutboxStats,
 } from './store.js';

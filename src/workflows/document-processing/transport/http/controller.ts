@@ -8,6 +8,7 @@ import {
   Param,
   Post,
 } from '@nestjs/common';
+import { perClient, RateLimit } from '../../../../platform/ratelimit/index.js';
 import {
   err,
   failure,
@@ -68,6 +69,8 @@ function respond<T>(result: Result<T, Failure>): T {
   );
 }
 
+/** Per-client bound on this controller's requests; see platform/ratelimit. */
+@RateLimit(perClient('document_processing', 120, 60_000))
 @Controller('organizations/:organizationId/documents')
 export class DocumentProcessingController {
   constructor(

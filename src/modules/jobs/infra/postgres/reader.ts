@@ -6,6 +6,7 @@ import {
   type Result,
 } from '../../../../shared/errors/index.js';
 import { parse, type ID } from '../../../../shared/id/index.js';
+import type { After } from '../../../../shared/pagination/index.js';
 import { map, type TransactionDatabase } from '../../../../shared/postgres/index.js';
 import type { JobReader } from '../../app/index.js';
 import { Job, type JobSubject } from '../../domain/index.js';
@@ -24,6 +25,7 @@ type JobRow = {
   started_at: Date | null;
   finished_at: Date | null;
   failure_code: string | null;
+  version: number;
 };
 
 function storedId(value: unknown): Result<ID, Failure> {
@@ -57,6 +59,7 @@ function restore(row: JobRow): Result<Job, Failure> {
     startedAt: row.started_at,
     finishedAt: row.finished_at,
     failureCode: row.failure_code,
+    version: row.version,
   });
 }
 
@@ -72,7 +75,8 @@ const columns = `id AS job_id,
                  updated_at,
                  started_at,
                  finished_at,
-                 failure_code`;
+                 failure_code,
+                 version`;
 
 export class PostgresJobReader implements JobReader {
   constructor(private readonly database: TransactionDatabase) {}
@@ -91,7 +95,7 @@ export class PostgresJobReader implements JobReader {
     }, signal);
   }
 
-  findBySubject(
+  findOpenBySubject(
     organizationId: ID,
     kind: string,
     subject: JobSubject,
@@ -106,6 +110,8 @@ export class PostgresJobReader implements JobReader {
               AND kind=$2
               AND subject_type=$3
               AND subject_id=$4::uuid
+              AND (status IN ('queued','running')
+                   OR (status='failed' AND attempts<max_attempts))
             ORDER BY created_at,id
             LIMIT 1`,
           [organizationId, kind, subject.type, subject.id],
@@ -117,8 +123,37 @@ export class PostgresJobReader implements JobReader {
     }, signal);
   }
 
+  listRunningStartedBefore(
+    startedBefore: Date,
+    limit: number,
+    signal?: AbortSignal,
+  ): Promise<Result<readonly Job[], Failure>> {
+    return this.database.transaction(async (transaction) => {
+      try {
+        const result = await transaction.query<JobRow>(
+          `SELECT ${columns}
+             FROM public.n2f_jobs_jobs
+            WHERE status='running' AND started_at<$1
+            ORDER BY started_at,id
+            LIMIT $2`,
+          [startedBefore, limit],
+        );
+        const jobs: Job[] = [];
+        for (const row of result.rows) {
+          const job = restore(row);
+          if (!job.ok) return job;
+          jobs.push(job.value);
+        }
+        return ok(jobs);
+      } catch (cause) {
+        return err(map(cause));
+      }
+    }, signal);
+  }
+
   listForOrganization(
     organizationId: ID,
+    page: Readonly<{ limit: number; after?: After }>,
     signal?: AbortSignal,
   ): Promise<Result<readonly Job[], Failure>> {
     return this.database.transaction(async (transaction) => {
@@ -127,8 +162,10 @@ export class PostgresJobReader implements JobReader {
           `SELECT ${columns}
              FROM public.n2f_jobs_jobs
             WHERE organization_id=$1::uuid
-            ORDER BY created_at,id`,
-          [organizationId],
+              AND ($2::timestamptz IS NULL OR (created_at,id) > ($2::timestamptz,$3::uuid))
+            ORDER BY created_at,id
+            LIMIT $4`,
+          [organizationId, page.after?.at ?? null, page.after?.id ?? null, page.limit + 1],
         );
         const jobs: Job[] = [];
         for (const row of result.rows) {

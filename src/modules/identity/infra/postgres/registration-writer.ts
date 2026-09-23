@@ -6,7 +6,8 @@ import {
 import { enqueue } from '../../../../shared/events/postgres/index.js';
 import { assertEventWork } from '../../../../shared/events/index.js';
 import type { Envelope } from '../../../../shared/events/index.js';
-import { map } from '../../../../shared/postgres/index.js';
+import { map, violatedUnique } from '../../../../shared/postgres/index.js';
+import { alreadyExists, emailTaken } from '../failures.js';
 import type { WorkContext } from '../../../../shared/provenance/index.js';
 import type { SecretString } from '../../../../shared/secret/index.js';
 import type { Credential, Identity } from '../../domain/index.js';
@@ -71,7 +72,14 @@ export class PostgresRegistrationWriter implements RegistrationWriter {
 
         return enqueue(transaction, input.event);
       } catch (cause) {
-        return err(map(cause));
+        switch (violatedUnique(cause)) {
+          case 'n2f_identity_credentials_email_key':
+            return err(emailTaken());
+          case 'n2f_identity_identities_pkey':
+            return err(alreadyExists());
+          default:
+            return err(map(cause));
+        }
       }
     }, signal);
   }

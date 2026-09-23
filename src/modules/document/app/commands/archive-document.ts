@@ -119,6 +119,8 @@ export class ArchiveDocument {
         status: archived.value.status,
         archived_at: archived.value.archivedAt?.toISOString(),
       },
+      { kind: 'document', id: archived.value.id },
+      archived.value.organizationId,
     );
     if (!event.ok) return err(dependencyFailure(event.error, 'event.create'));
 

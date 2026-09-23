@@ -20,6 +20,7 @@ type OrganizationMembershipRow = {
   organization_status: string;
   organization_created_at: Date;
   organization_updated_at: Date;
+  organization_version: number;
   membership_id: string;
   membership_identity_id: string;
   membership_role: string;
@@ -27,6 +28,7 @@ type OrganizationMembershipRow = {
   membership_created_at: Date;
   membership_updated_at: Date;
   membership_revoked_at: Date | null;
+  membership_version: number;
 };
 
 function storedId(value: unknown): Result<ID, Failure> {
@@ -55,6 +57,7 @@ function viewFrom(row: OrganizationMembershipRow): Result<OrganizationMembership
     status: row.organization_status as Organization['status'],
     createdAt: row.organization_created_at,
     updatedAt: row.organization_updated_at,
+    version: row.organization_version,
   });
   if (!organization.ok) return organization;
 
@@ -67,6 +70,7 @@ function viewFrom(row: OrganizationMembershipRow): Result<OrganizationMembership
     createdAt: row.membership_created_at,
     updatedAt: row.membership_updated_at,
     revokedAt: row.membership_revoked_at,
+    version: row.membership_version,
   });
   if (!membership.ok) return membership;
 
@@ -90,13 +94,15 @@ export class PostgresOrganizationReader implements OrganizationReader {
              o.status AS organization_status,
              o.created_at AS organization_created_at,
              o.updated_at AS organization_updated_at,
+             o.version AS organization_version,
              m.id AS membership_id,
              m.identity_id AS membership_identity_id,
              m.role AS membership_role,
              m.status AS membership_status,
              m.created_at AS membership_created_at,
              m.updated_at AS membership_updated_at,
-             m.revoked_at AS membership_revoked_at
+             m.revoked_at AS membership_revoked_at,
+             m.version AS membership_version
            FROM public.n2f_organization_memberships m
            JOIN public.n2f_organization_organizations o
              ON o.id=m.organization_id

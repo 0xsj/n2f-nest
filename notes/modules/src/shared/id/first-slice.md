@@ -6,7 +6,7 @@ composition easier.
 
 ## Origin
 
-Ported from the previous Signals backend on 2026-09-18 after the errors and clock
+Ported from the predecessor product's backend on 2026-09-18 after the errors and clock
 leaves. The fresh version consumes the shared `WallClock` capability rather than
 duplicating that interface locally.
 

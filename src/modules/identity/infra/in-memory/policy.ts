@@ -47,9 +47,29 @@ class FixedDurationPolicy {
   }
 }
 
+const DEFAULT_SESSION_LIMITS = Object.freeze({
+  lifetimeMs: 24 * 60 * 60 * 1000,
+  idleTimeoutMs: 60 * 60 * 1000,
+  maxActivePerIdentity: 10,
+});
+
 export class DefaultSessionPolicy extends FixedDurationPolicy implements SessionPolicy {
-  constructor() {
-    super(24 * 60 * 60 * 1000, 'identity.invalid_session_expiry', 'session');
+  readonly idleTimeoutMs: number;
+  /** Often enough that recorded activity lags real use by under a quarter of the idle timeout. */
+  readonly activityIntervalMs: number;
+  readonly maxActivePerIdentity: number;
+
+  constructor(
+    limits: Readonly<{
+      lifetimeMs: number;
+      idleTimeoutMs: number;
+      maxActivePerIdentity: number;
+    }> = DEFAULT_SESSION_LIMITS,
+  ) {
+    super(limits.lifetimeMs, 'identity.invalid_session_expiry', 'session');
+    this.idleTimeoutMs = limits.idleTimeoutMs;
+    this.activityIntervalMs = Math.min(60 * 1000, Math.floor(limits.idleTimeoutMs / 4));
+    this.maxActivePerIdentity = limits.maxActivePerIdentity;
   }
 }
 
@@ -59,5 +79,15 @@ export class DefaultVerificationPolicy
 {
   constructor() {
     super(24 * 60 * 60 * 1000, 'identity.invalid_verification_expiry', 'verification');
+  }
+}
+
+/** Password-reset links are short-lived: an hour. */
+export class DefaultPasswordResetPolicy
+  extends FixedDurationPolicy
+  implements VerificationPolicy
+{
+  constructor() {
+    super(60 * 60 * 1000, 'identity.invalid_verification_expiry', 'password reset');
   }
 }

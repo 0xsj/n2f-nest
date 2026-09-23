@@ -110,6 +110,8 @@ export class CreateOrganization {
         name: organization.value.name,
         slug: organization.value.slug,
       },
+      { kind: 'organization', id: organization.value.id },
+      organization.value.id,
     );
     if (!organizationEvent.ok) return err(dependencyFailure(organizationEvent.error, 'event.create'));
 
@@ -127,6 +129,8 @@ export class CreateOrganization {
         membership_id: membership.value.id,
         role: membership.value.role,
       },
+      { kind: 'membership', id: membership.value.id },
+      organization.value.id,
     );
     if (!membershipEvent.ok) return err(dependencyFailure(membershipEvent.error, 'event.create'));
 

@@ -18,6 +18,7 @@ type KnownIdentityFailure =
       | 'identity.email_taken'
       | 'identity.session_already_exists'
       | 'identity.challenge_already_exists'
+      | 'identity.stale_write'
     >
   | TypedFailure<
       'invalid',
@@ -88,6 +89,11 @@ function knownFailure(error: Failure): KnownIdentityFailure | undefined {
         cause: error,
       });
     case 'identity.challenge_already_exists':
+      return typedFailure('conflict', error.type, error.message, {
+        fields: error.fields,
+        cause: error,
+      });
+    case 'identity.stale_write':
       return typedFailure('conflict', error.type, error.message, {
         fields: error.fields,
         cause: error,

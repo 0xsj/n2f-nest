@@ -12,6 +12,8 @@ import type {
   CurrentSessionReader,
   IdentityView,
   IdentityViewReader,
+  SessionActivityWriter,
+  SessionPolicy,
 } from '../ports/index.js';
 import type { SessionFailure } from '../../domain/index.js';
 
@@ -25,6 +27,7 @@ export type CurrentIdentityFailure =
       'unavailable',
       | 'identity.session_reader_unavailable'
       | 'identity.identity_reader_unavailable'
+      | 'identity.session_activity_unavailable'
     >;
 
 export type GetCurrentIdentityQuery = Readonly<{
@@ -36,6 +39,8 @@ export type GetCurrentIdentityDependencies = Readonly<{
   clock: WallClock;
   sessions: CurrentSessionReader;
   identities: IdentityViewReader;
+  policy: Pick<SessionPolicy, 'idleTimeoutMs' | 'activityIntervalMs'>;
+  activity: SessionActivityWriter;
 }>;
 
 function unauthenticated(): TypedFailure<
@@ -67,6 +72,17 @@ function identityReaderUnavailable(
     'unavailable',
     'identity.identity_reader_unavailable',
     'current Identity storage is unavailable',
+    { cause: error },
+  );
+}
+
+function sessionActivityUnavailable(
+  error: Failure,
+): TypedFailure<'unavailable', 'identity.session_activity_unavailable'> {
+  return typedFailure(
+    'unavailable',
+    'identity.session_activity_unavailable',
+    'current Identity session activity could not be recorded',
     { cause: error },
   );
 }
@@ -118,7 +134,9 @@ export class GetCurrentIdentity {
       return err(unauthenticated());
     }
 
-    const usable = session.value.assertUsable(this.dependencies.clock.now());
+    const now = this.dependencies.clock.now();
+    const { policy } = this.dependencies;
+    const usable = session.value.assertUsable(now, policy.idleTimeoutMs);
 
     if (!usable.ok) {
       return err(sessionFailure(usable.error));
@@ -135,6 +153,16 @@ export class GetCurrentIdentity {
 
     if (identity.value === null || identity.value.status !== 'active') {
       return err(unauthenticated());
+    }
+
+    // Record use at most once per interval, so an active session stays alive
+    // without a write on every request. A session that cannot record its use
+    // would idle out while in use, so the failure is reported.
+    if (now.getTime() - session.value.lastSeenAt.getTime() >= policy.activityIntervalMs) {
+      const recorded = await this.dependencies.activity.record(session.value.id, now, query.signal);
+      if (!recorded.ok) {
+        return err(sessionActivityUnavailable(recorded.error));
+      }
     }
 
     return {

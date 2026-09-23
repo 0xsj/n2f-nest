@@ -16,6 +16,8 @@ import {
   CompleteDocumentProcessing,
   CreateDocument,
   FailDocumentProcessing,
+  RetryDocumentProcessing,
+  CheckDocumentProcessable,
   GetDocument,
   ListDocuments,
   type DocumentReader,
@@ -26,15 +28,16 @@ import {
   InMemoryDocumentReader,
   InMemoryDocumentStore,
   InMemoryDocumentWriter,
-  OrganizationAccessReaderAdapter,
 } from './in-memory/index.js';
 import {
   PostgresDocumentReader,
   PostgresDocumentWriter,
 } from './postgres/index.js';
 
+import { DOCUMENT_REQUIRES } from './requires.js';
+
 const PORTS = {
-  access: Symbol('document.organizationAccessReader'),
+  access: DOCUMENT_REQUIRES.organizationAccess,
   reader: Symbol('document.reader'),
   writer: Symbol('document.writer'),
 } as const;
@@ -54,11 +57,6 @@ export const documentProviders: Provider[] = [
   InMemoryDocumentStore,
   InMemoryDocumentReader,
   InMemoryDocumentWriter,
-  OrganizationAccessReaderAdapter,
-  {
-    provide: PORTS.access,
-    useExisting: OrganizationAccessReaderAdapter,
-  },
   {
     provide: PORTS.reader,
     useFactory: (
@@ -113,6 +111,11 @@ export const documentProviders: Provider[] = [
     inject: [PORTS.access, PORTS.reader],
   },
   {
+    provide: CheckDocumentProcessable,
+    useFactory: (documents: DocumentReader) => new CheckDocumentProcessable({ documents }),
+    inject: [PORTS.reader],
+  },
+  {
     provide: GetDocument,
     useFactory: (
       access: OrganizationAccessReader,
@@ -148,6 +151,16 @@ export const documentProviders: Provider[] = [
       documents: DocumentReader,
       writer: DocumentWriter,
     ) => new FailDocumentProcessing({ clock, ids, documents, writer }),
+    inject: [SystemClock, V7, PORTS.reader, PORTS.writer],
+  },
+  {
+    provide: RetryDocumentProcessing,
+    useFactory: (
+      clock: SystemClock,
+      ids: V7,
+      documents: DocumentReader,
+      writer: DocumentWriter,
+    ) => new RetryDocumentProcessing({ clock, ids, documents, writer }),
     inject: [SystemClock, V7, PORTS.reader, PORTS.writer],
   },
 ];

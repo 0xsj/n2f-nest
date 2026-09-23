@@ -71,22 +71,8 @@ export class RevokeInvitation {
     );
     if (!actor.ok) return err(dependencyFailure(actor.error, 'identity.current.find'));
 
-    const invitation = await this.dependencies.invitations.findById(
-      command.invitationId,
-      command.signal,
-    );
-    if (!invitation.ok) return err(dependencyFailure(invitation.error, 'invitation.findById'));
-    if (
-      invitation.value === null ||
-      invitation.value.organizationId !== command.organizationId
-    ) {
-      return err(
-        failure('not_found', 'invitation was not found', {
-          type: 'organization.invitation.not_found',
-        }),
-      );
-    }
-
+    // Authorize before looking the target up, so a non-owner cannot tell
+    // which IDs exist in another organization.
     const actorMembership =
       await this.dependencies.memberships.findActiveForIdentity(
         command.organizationId,
@@ -109,6 +95,22 @@ export class RevokeInvitation {
       );
     }
 
+    const invitation = await this.dependencies.invitations.findById(
+      command.invitationId,
+      command.signal,
+    );
+    if (!invitation.ok) return err(dependencyFailure(invitation.error, 'invitation.findById'));
+    if (
+      invitation.value === null ||
+      invitation.value.organizationId !== command.organizationId
+    ) {
+      return err(
+        failure('not_found', 'invitation was not found', {
+          type: 'organization.invitation.not_found',
+        }),
+      );
+    }
+
     const revokedAt = this.dependencies.clock.now();
     const revoked = invitation.value.revoke(revokedAt);
     if (!revoked.ok) return revoked;
@@ -126,6 +128,8 @@ export class RevokeInvitation {
         invitation_id: revoked.value.id,
         role: revoked.value.role,
       },
+      { kind: 'invitation', id: revoked.value.id },
+      revoked.value.organizationId,
     );
     if (!event.ok) return err(dependencyFailure(event.error, 'event.create'));
 

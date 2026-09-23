@@ -6,6 +6,11 @@ import {
   type Result,
 } from '../../../shared/errors/index.js';
 import type { ID } from '../../../shared/id/index.js';
+import {
+  UNSAVED,
+  isStoredVersion,
+  type Version,
+} from '../../../shared/version/index.js';
 
 export const IDENTITY_STATUSES = Object.freeze([
   'pending_verification',
@@ -39,6 +44,7 @@ export type RestoreIdentityInput = Readonly<{
   createdAt: Date;
   updatedAt: Date;
   verifiedAt: Date | null;
+  version: Version;
 }>;
 
 type IdentityState = Readonly<{
@@ -47,6 +53,7 @@ type IdentityState = Readonly<{
   createdAt: Date;
   updatedAt: Date;
   verifiedAt: Date | null;
+  version: Version;
 }>;
 
 function validDate(value: Date): boolean {
@@ -90,6 +97,7 @@ export class Identity {
         createdAt,
         updatedAt: copyDate(createdAt),
         verifiedAt: null,
+        version: UNSAVED,
       }),
     );
   }
@@ -101,7 +109,8 @@ export class Identity {
       !IDENTITY_STATUSES.includes(input.status) ||
       !validDate(input.createdAt) ||
       !validDate(input.updatedAt) ||
-      (input.verifiedAt !== null && !validDate(input.verifiedAt))
+      (input.verifiedAt !== null && !validDate(input.verifiedAt)) ||
+      !isStoredVersion(input.version)
     ) {
       return err(
         invalid('identity state is invalid', 'identity.invalid_state'),
@@ -139,6 +148,7 @@ export class Identity {
         updatedAt: copyDate(input.updatedAt),
         verifiedAt:
           input.verifiedAt === null ? null : copyDate(input.verifiedAt),
+        version: input.version,
       }),
     );
   }
@@ -163,6 +173,16 @@ export class Identity {
     return this.state.verifiedAt === null
       ? null
       : copyDate(this.state.verifiedAt);
+  }
+
+  /** The optimistic-concurrency token this state was loaded at. */
+  get version(): Version {
+    return this.state.version;
+  }
+
+  /** This state as storage holds it after a successful write. */
+  saved(): Identity {
+    return new Identity({ ...this.state, version: this.state.version + 1 });
   }
 
   verify(at: Date): Result<Identity, IdentityFailure> {
@@ -291,6 +311,7 @@ export class Identity {
       createdAt: copyDate(patch.createdAt ?? this.state.createdAt),
       updatedAt: copyDate(patch.updatedAt ?? this.state.updatedAt),
       verifiedAt: verifiedAt === null ? null : copyDate(verifiedAt),
+      version: this.state.version,
     });
   }
 }

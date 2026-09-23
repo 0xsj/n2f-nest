@@ -88,18 +88,8 @@ export class RevokeMembership {
     );
     if (!actor.ok) return err(dependencyFailure(actor.error, 'identity.current.find'));
 
-    const membership = await this.dependencies.memberships.findById(
-      command.membershipId,
-      command.signal,
-    );
-    if (!membership.ok) return err(dependencyFailure(membership.error, 'membership.findById'));
-    if (
-      membership.value === null ||
-      membership.value.organizationId !== command.organizationId
-    ) {
-      return err(notFound());
-    }
-
+    // Authorize before looking the target up, so a non-owner cannot tell
+    // which IDs exist in another organization.
     const actorMembership =
       await this.dependencies.memberships.findActiveForIdentity(
         command.organizationId,
@@ -112,6 +102,18 @@ export class RevokeMembership {
       actorMembership.value.role !== 'owner'
     ) {
       return err(forbidden());
+    }
+
+    const membership = await this.dependencies.memberships.findById(
+      command.membershipId,
+      command.signal,
+    );
+    if (!membership.ok) return err(dependencyFailure(membership.error, 'membership.findById'));
+    if (
+      membership.value === null ||
+      membership.value.organizationId !== command.organizationId
+    ) {
+      return err(notFound());
     }
 
     if (membership.value.role === 'owner') {
@@ -144,6 +146,8 @@ export class RevokeMembership {
         membership_id: revoked.value.id,
         role: revoked.value.role,
       },
+      { kind: 'membership', id: revoked.value.id },
+      revoked.value.organizationId,
     );
     if (!event.ok) return err(dependencyFailure(event.error, 'event.create'));
 

@@ -23,6 +23,30 @@ const definitions = [
     type: 'gauge' as const,
     labels: [],
   },
+  {
+    name: 'n2f_event_deliveries_total',
+    help: 'Event delivery attempts by consumer and outcome (processed, retrying, dead).',
+    type: 'counter' as const,
+    labels: ['consumer', 'outcome'],
+  },
+  {
+    name: 'n2f_event_inbox_backlog',
+    help: 'Event deliveries not yet processed, by consumer and state (pending, dead).',
+    type: 'gauge' as const,
+    labels: ['consumer', 'state'],
+  },
+  {
+    name: 'n2f_event_outbox_rows',
+    help: 'Outbox rows awaiting publication or dead-lettered, by state.',
+    type: 'gauge' as const,
+    labels: ['state'],
+  },
+  {
+    name: 'n2f_event_outbox_oldest_pending_seconds',
+    help: 'Age of the oldest outbox row awaiting publication; outbox lag.',
+    type: 'gauge' as const,
+    labels: [],
+  },
 ] as const;
 
 @Global()

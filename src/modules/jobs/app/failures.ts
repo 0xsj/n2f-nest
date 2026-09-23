@@ -8,9 +8,9 @@ import type { JobFailure } from '../domain/index.js';
 
 type KnownJobFailure =
   | TypedFailure<'forbidden', 'job.access_forbidden' | 'job.submit_forbidden' | 'job.transition_forbidden'>
-  | TypedFailure<'conflict', 'job.already_exists'>
+  | TypedFailure<'conflict', 'job.already_exists' | 'job.stale_write' | 'job.subject_taken'>
   | TypedFailure<'unavailable', 'job.id_generation'>
-  | TypedFailure<'invalid', 'job.invalid_operation'>
+  | TypedFailure<'invalid', 'job.invalid_operation' | 'job.invalid_page'>
   | TypedFailure<'not_found', 'job.not_found'>
   | TypedFailure<'conflict', 'job.organization_mismatch'>
   | TypedFailure<'internal', 'job.persistence_invalid'>
@@ -36,11 +36,14 @@ function knownFailure(error: Failure): KnownJobFailure | undefined {
     case 'job.transition_forbidden':
       return typedFailure('forbidden', error.type, error.message, { fields: error.fields, cause: error });
     case 'job.already_exists':
+    case 'job.stale_write':
+    case 'job.subject_taken':
     case 'job.organization_mismatch':
       return typedFailure('conflict', error.type, error.message, { fields: error.fields, cause: error });
     case 'job.id_generation':
       return typedFailure('unavailable', error.type, error.message, { fields: error.fields, cause: error });
     case 'job.invalid_operation':
+    case 'job.invalid_page':
       return typedFailure('invalid', error.type, error.message, { fields: error.fields, cause: error });
     case 'job.not_found':
       return typedFailure('not_found', error.type, error.message, { fields: error.fields, cause: error });
@@ -77,4 +80,9 @@ export function idGenerationFailure(error: Failure): JobsApplicationFailure {
     details: { cause: error.type ?? 'unknown' },
     cause: error,
   });
+}
+
+/** A page size or cursor the caller supplied is invalid or belongs to another list. */
+export function invalidPage(): JobsApplicationFailure {
+  return typedFailure('invalid', 'job.invalid_page', 'page size or cursor is invalid');
 }

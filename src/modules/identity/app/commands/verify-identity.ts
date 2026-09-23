@@ -81,7 +81,9 @@ export class VerifyIdentity {
       );
     }
 
-    if (record.value === null) {
+    // A password-reset challenge proves the same mailbox but authorizes a
+    // different act; it is not a verification challenge.
+    if (record.value === null || record.value.challenge.purpose !== 'email_verification') {
       return err(notFound());
     }
 
@@ -148,6 +150,7 @@ export class VerifyIdentity {
         purpose: consumed.value.purpose,
         status: verified.value.status,
       },
+      { kind: 'identity', id: verified.value.id },
     );
 
     if (!event.ok) {

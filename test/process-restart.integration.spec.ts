@@ -1,6 +1,10 @@
+import { Broker } from '../src/shared/events/nats/index.js';
+import { SecretString } from '../src/shared/secret/index.js';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import { mailbox, verificationFrom } from './support/mail.js';
+import { resetLoopbackRateLimits } from './support/rate-limits.js';
 
 const enabled = process.env.N2F_RUN_RESTART_INTEGRATION === '1';
 const integration = enabled ? describe : describe.skip;
@@ -117,6 +121,20 @@ async function stopBackend(process: RunningBackend | undefined): Promise<void> {
   }
 }
 
+/** Delete the durable consumer the backend processes provisioned for this run. */
+async function removeConsumer(consumer: string): Promise<void> {
+  const opened = await Broker.open({
+    url: new SecretString(process.env.N2F_NATS_URL ?? 'nats://127.0.0.1:7222'),
+    stream: process.env.N2F_NATS_STREAM ?? 'n2f_events',
+    subjectPrefix: process.env.N2F_NATS_SUBJECT_PREFIX ?? 'n2f.events.',
+    consumer,
+    timeoutMs: 2000,
+  });
+  if (!opened.ok) return;
+  await opened.value.removeConsumer();
+  await opened.value.close();
+}
+
 integration('Persistent process restart', () => {
   it('preserves durable identity, session, organization and document state', async () => {
     const consumer = `restart_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
@@ -125,25 +143,19 @@ integration('Persistent process restart', () => {
     const password = 'correct-horse-7';
 
     try {
+      await resetLoopbackRateLimits();
       backend = await startBackend(consumer);
 
       const registered = await postJson('/identity/register', { email, password });
-      expect(registered.status).toBe(201);
-      const identityId = registered.body.identityId as string;
+      expect(registered.status).toBe(202);
 
-      const challenge = await postJson('/identity/verification-challenges', {
-        identityId,
-      });
-      expect(challenge.status).toBe(201);
-
-      const verified = await postJson('/identity/verify', {
-        challengeId: challenge.body.challengeId,
-        token: challenge.body.token,
-      });
+      const mail = await jsonRequest(mailbox(email));
+      const verified = await postJson('/identity/verify', verificationFrom(mail.body));
       expect(verified).toEqual({
         status: 201,
-        body: { identityId, status: 'active' },
+        body: { identityId: expect.any(String), status: 'active' },
       });
+      const identityId = verified.body.identityId as string;
 
       const loggedIn = await postJson('/identity/login', { email, password });
       expect(loggedIn.status).toBe(201);
@@ -217,6 +229,7 @@ integration('Persistent process restart', () => {
       expect(loggedOut.status).toBe(201);
     } finally {
       await stopBackend(backend);
+      await removeConsumer(consumer);
     }
   }, 30000);
 });

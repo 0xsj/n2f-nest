@@ -10,7 +10,6 @@ import {
   EVENT_BUS,
   type EventBus,
 } from '../events/event-bus.js';
-import { DurableInProcessPublisher } from '../events/durable-in-process-publisher.js';
 import { NATS_BROKER } from './tokens.js';
 
 const POLL_MS = 250;
@@ -29,23 +28,24 @@ function wait(milliseconds: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
-/** Bridges one JetStream delivery into local subscribers before ACK. */
+/**
+ * Moves JetStream deliveries into the durable inbox, then acknowledges them.
+ * Subscribers run later from the inbox, so a slow or failing subscriber never
+ * holds a JetStream acknowledgement.
+ */
 @Injectable()
 export class NatsEventWorker
   implements OnApplicationBootstrap, OnModuleDestroy
 {
   private readonly logger = new Logger('NatsEventWorker');
-  private readonly sink: DurableInProcessPublisher;
   private active = false;
   private abort?: AbortController;
   private pollTask?: Promise<void>;
 
   constructor(
     @Inject(NATS_BROKER) private readonly broker: Broker | undefined,
-    @Inject(EVENT_BUS) bus: EventBus,
-  ) {
-    this.sink = new DurableInProcessPublisher(bus);
-  }
+    @Inject(EVENT_BUS) private readonly sink: EventBus,
+  ) {}
 
   onApplicationBootstrap(): void {
     if (!this.broker) return;

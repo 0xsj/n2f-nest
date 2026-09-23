@@ -26,6 +26,8 @@ export type ChaosFault = Readonly<{
   times?: number | 'always';
   delayMs?: number;
   failure?: Failure;
+  /** Affect only calls made for this event consumer (consume points). */
+  consumer?: string;
 }>;
 
 export type ChaosObservation = Readonly<{
@@ -119,9 +121,13 @@ export class FaultInjector {
   async hit(
     point: ChaosPoint,
     signal?: AbortSignal,
+    context: Readonly<{ consumer?: string }> = {},
   ): Promise<Result<void, Failure>> {
     const fault = this.#faults.get(point);
     if (!fault) return ok(undefined);
+    if (fault.consumer !== undefined && fault.consumer !== context.consumer) {
+      return ok(undefined);
+    }
 
     const affected = fault.remaining === 'always' || fault.remaining > 0;
     this.#observations.push({

@@ -107,6 +107,8 @@ export class CreateDocument {
         storage_key: document.value.storageKey,
         status: document.value.status,
       },
+      { kind: 'document', id: document.value.id },
+      document.value.organizationId,
     );
     if (!event.ok) return err(dependencyFailure(event.error, 'event.create'));
 

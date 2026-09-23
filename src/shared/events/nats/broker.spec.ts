@@ -4,10 +4,10 @@ import { Broker } from './broker.js';
 
 it('rejects invalid JetStream configuration before connecting', async () => {
   for (const config of [
-    { url: 'http://localhost:4222', stream: 'signals', consumer: 'audit', timeoutMs: 1000 },
-    { url: 'nats://', stream: 'signals', consumer: 'audit', timeoutMs: 1000 },
+    { url: 'http://localhost:4222', stream: 'n2f_events', consumer: 'audit', timeoutMs: 1000 },
+    { url: 'nats://', stream: 'n2f_events', consumer: 'audit', timeoutMs: 1000 },
     { url: 'nats://localhost:4222', stream: 'bad stream', consumer: 'audit', timeoutMs: 1000 },
-    { url: 'nats://localhost:4222', stream: 'signals', consumer: 'audit', timeoutMs: 0 },
+    { url: 'nats://localhost:4222', stream: 'n2f_events', consumer: 'audit', timeoutMs: 0 },
     { url: 'nats://localhost:4222', stream: 'n2f_events', consumer: 'audit', timeoutMs: 1000, subjectPrefix: 'n2f.events' },
     { url: 'nats://localhost:4222', stream: 'n2f_events', consumer: 'audit', timeoutMs: 1000, subjectPrefix: 'n2f.*.' },
   ]) {

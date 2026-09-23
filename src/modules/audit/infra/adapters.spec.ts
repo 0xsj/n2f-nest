@@ -34,6 +34,7 @@ function entry() {
     eventType: 'organization.created.v1',
     occurredAt: new Date('2026-09-22T00:00:00.000Z'),
     recordedAt: new Date('2026-09-22T00:00:01.000Z'),
+    tenant: null,
     work: work.value,
     subject: {
       kind: 'organization',

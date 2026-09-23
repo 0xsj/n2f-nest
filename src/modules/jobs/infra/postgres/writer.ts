@@ -1,12 +1,23 @@
 import {
   err,
-  failure,
   type Failure,
   type Result,
 } from '../../../../shared/errors/index.js';
 import { assertEventWork } from '../../../../shared/events/index.js';
 import { enqueue } from '../../../../shared/events/postgres/index.js';
-import { map, type TransactionDatabase } from '../../../../shared/postgres/index.js';
+import {
+  map,
+  missingOrStale,
+  violatedUnique,
+  type TransactionDatabase,
+} from '../../../../shared/postgres/index.js';
+import {
+  CONSTRAINTS,
+  jobExists,
+  jobNotFound,
+  staleWrite,
+  subjectTaken,
+} from '../failures.js';
 import type { JobCommit, JobWriter } from '../../app/index.js';
 
 export class PostgresJobWriter implements JobWriter {
@@ -50,9 +61,11 @@ export class PostgresJobWriter implements JobWriter {
                     updated_at=$8,
                     started_at=$9,
                     finished_at=$10,
-                    failure_code=$11
+                    failure_code=$11,
+                    version=version+1
               WHERE id=$1::uuid
-                AND organization_id=$12::uuid`,
+                AND organization_id=$12::uuid
+                AND version=$13`,
             [
               input.job.id,
               input.job.kind,
@@ -66,15 +79,28 @@ export class PostgresJobWriter implements JobWriter {
               input.job.finishedAt,
               input.job.failureCode,
               input.job.organizationId,
+              input.job.version,
             ],
           );
           if (updated.rowCount !== 1) {
-            return err(failure('not_found', 'job was not found', { type: 'job.not_found' }));
+            return err(
+              (await missingOrStale(transaction, 'public.n2f_jobs_jobs', input.job.id)) ===
+                'missing'
+                ? jobNotFound()
+                : staleWrite(),
+            );
           }
         }
         return enqueue(transaction, input.event);
       } catch (cause) {
-        return err(map(cause));
+        switch (violatedUnique(cause)) {
+          case CONSTRAINTS.jobPkey:
+            return err(jobExists());
+          case CONSTRAINTS.subject:
+            return err(subjectTaken());
+          default:
+            return err(map(cause));
+        }
       }
     }, input.signal);
   }

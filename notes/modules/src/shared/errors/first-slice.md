@@ -5,7 +5,7 @@ shared package responsible for transport policy.
 
 ## Origin
 
-Ported from the previous Signals backend on 2026-09-18 while restarting the
+Ported from the predecessor product's backend on 2026-09-18 while restarting the
 Nest application from a clean scaffold. The previous implementation already
 had the desired semantics, so the useful behavior was retained while its large
 contract document and template-specific commentary were not copied forward.

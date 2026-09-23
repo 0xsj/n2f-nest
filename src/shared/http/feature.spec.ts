@@ -62,7 +62,7 @@ describe('HTTP feature leaves', () => {
       }).ok,
     ).toBe(true);
     for (const bad of [
-      { status: 200, headers: { 'X-Powered-By': 'signals' } },
+      { status: 200, headers: { 'X-Powered-By': 'example' } },
       { status: 404 },
       { status: 204, body: { no: 'body' } },
       { status: 200, headers: { 'Cache-Control': 'no\r\nstore' } },

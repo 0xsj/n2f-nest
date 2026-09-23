@@ -159,6 +159,8 @@ export class TransitionJob {
         attempts: changed.value.attempts,
         failure_code: changed.value.failureCode,
       },
+      { kind: 'job', id: changed.value.id },
+      changed.value.organizationId,
     );
     if (!event.ok) return err(dependencyFailure(event.error, 'event.create'));
     const committed = await this.dependencies.writer.commit({

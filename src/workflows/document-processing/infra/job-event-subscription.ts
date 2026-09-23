@@ -1,14 +1,7 @@
 import { Inject, Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
-import {
-  err,
-  failure,
-  ok,
-  type Failure,
-  type Result,
-} from '../../../shared/errors/index.js';
+import { ok, type Failure, type Result } from '../../../shared/errors/index.js';
 import { EVENT_BUS, type EventBus } from '../../../platform/events/event-bus.js';
 import { Envelope } from '../../../shared/events/index.js';
-import { parse, type ID } from '../../../shared/id/index.js';
 import {
   actor,
   Factory as ProvenanceFactory,
@@ -16,33 +9,11 @@ import {
   type WorkContext,
 } from '../../../shared/provenance/index.js';
 import {
-  BeginDocumentProcessing,
   CompleteDocumentProcessing,
   FailDocumentProcessing,
-} from '../../../modules/document/app/index.js';
-
-type JobEventAction = 'retry' | 'complete' | 'fail';
-
-function id(value: unknown, field: string): Result<ID, Failure> {
-  if (typeof value !== 'string') {
-    return err(failure('invalid', `event ${field} is invalid`, { type: 'workflow.invalid_event' }));
-  }
-  return parse(value);
-}
-
-function subject(value: unknown): Result<{ type: string; id: ID } | null, Failure> {
-  if (value === undefined || value === null) return ok(null);
-  if (typeof value !== 'object' || Array.isArray(value)) {
-    return err(failure('invalid', 'job event subject is invalid', { type: 'workflow.invalid_event' }));
-  }
-  const input = value as { type?: unknown; id?: unknown };
-  if (typeof input.type !== 'string') {
-    return err(failure('invalid', 'job event subject is invalid', { type: 'workflow.invalid_event' }));
-  }
-  const subjectId = id(input.id, 'subject.id');
-  if (!subjectId.ok) return subjectId;
-  return ok({ type: input.type, id: subjectId.value });
-}
+  RetryDocumentProcessing,
+} from '../../../modules/document/commands.js';
+import { decodeJobEvent } from './job-events.js';
 
 function childWork(
   factory: ProvenanceFactory,
@@ -62,20 +33,6 @@ function childWork(
   return child.ok ? { ok: true, value: child.value.workContext() } : child;
 }
 
-function actionFor(type: string): JobEventAction | null {
-  switch (type) {
-    case 'job.retried.v1':
-      return 'retry';
-    case 'job.completed.v1':
-      return 'complete';
-    case 'job.failed.v1':
-    case 'job.canceled.v1':
-      return 'fail';
-    default:
-      return null;
-  }
-}
-
 @Injectable()
 export class DocumentProcessingJobEventSubscription
   implements OnModuleInit, OnModuleDestroy
@@ -86,13 +43,13 @@ export class DocumentProcessingJobEventSubscription
   constructor(
     @Inject(EVENT_BUS) private readonly bus: EventBus,
     private readonly factory: ProvenanceFactory,
-    private readonly begin: BeginDocumentProcessing,
+    private readonly retry: RetryDocumentProcessing,
     private readonly complete: CompleteDocumentProcessing,
     private readonly fail: FailDocumentProcessing,
   ) {}
 
   onModuleInit(): void {
-    this.unsubscribe = this.bus.subscribe((event, signal) =>
+    this.unsubscribe = this.bus.subscribe('document-processing', (event, signal) =>
       this.handle(event, signal),
     );
   }
@@ -105,61 +62,41 @@ export class DocumentProcessingJobEventSubscription
     event: Envelope,
     signal?: AbortSignal,
   ): Promise<Result<void, Failure>> {
-    const action = actionFor(event.type);
-    if (!action) return ok(undefined);
+    const decoded = decodeJobEvent(event);
+    if (!decoded.ok) return decoded;
+    const outcome = decoded.value;
+    if (!outcome) return ok(undefined);
 
-    const payload = event.payload();
-    const jobSubject = subject(payload.subject);
-    if (!jobSubject.ok) return jobSubject;
-    if (jobSubject.value === null || jobSubject.value.type !== 'document') {
-      return ok(undefined);
-    }
-
-    const organizationId = id(payload.organization_id, 'organization_id');
-    if (!organizationId.ok) return organizationId;
     const operationName =
-      action === 'retry'
-        ? 'document.processing.start'
-        : action === 'complete'
+      outcome.action === 'retry'
+        ? 'document.processing.retry'
+        : outcome.action === 'complete'
           ? 'document.processing.complete'
           : 'document.processing.fail';
     const work = childWork(this.factory, event.work, operationName);
     if (!work.ok) return work;
 
-    if (action === 'retry') {
-      const result = await this.begin.execute({
-        organizationId: organizationId.value,
-        documentId: jobSubject.value.id,
-        work: work.value,
-        signal,
-      });
-      if (!result.ok) this.logger.warn(`document retry projection failed: ${result.error.type}`);
-      return result.ok ? ok(undefined) : result;
-    }
-
-    if (action === 'complete') {
-      const result = await this.complete.execute({
-        organizationId: organizationId.value,
-        documentId: jobSubject.value.id,
-        work: work.value,
-        signal,
-      });
-      if (!result.ok) this.logger.warn(`document completion projection failed: ${result.error.type}`);
-      return result.ok ? ok(undefined) : result;
-    }
-
-    const failureCode =
-      typeof payload.failure_code === 'string'
-        ? payload.failure_code
-        : 'job.canceled';
-    const result = await this.fail.execute({
-      organizationId: organizationId.value,
-      documentId: jobSubject.value.id,
-      failureCode,
+    // The job is the document's processing run; the document ignores outcomes
+    // of any other run and of older attempts, so redelivered, late or
+    // superseded events are harmless no-ops.
+    const command = {
+      organizationId: outcome.organizationId,
+      documentId: outcome.documentId,
+      processingRun: outcome.jobId,
+      attempt: outcome.attempt,
       work: work.value,
       signal,
-    });
-    if (!result.ok) this.logger.warn(`document failure projection failed: ${result.error.type}`);
-    return result.ok ? ok(undefined) : result;
+    };
+    const result =
+      outcome.action === 'fail'
+        ? await this.fail.execute({ ...command, failureCode: outcome.failureCode })
+        : outcome.action === 'retry'
+          ? await this.retry.execute(command)
+          : await this.complete.execute(command);
+    if (!result.ok) {
+      this.logger.warn(`document ${outcome.action} projection failed: ${result.error.type}`);
+      return result;
+    }
+    return ok(undefined);
   }
 }

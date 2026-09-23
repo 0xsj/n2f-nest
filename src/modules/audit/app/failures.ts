@@ -8,7 +8,8 @@ import type { AuditEntryFailure } from '../domain/index.js';
 
 type KnownAuditFailure =
   | TypedFailure<'conflict', 'audit.event_id_reused'>
-  | TypedFailure<'invalid', 'audit.invalid_subject'>
+  | TypedFailure<'invalid', 'audit.invalid_subject' | 'audit.invalid_page'>
+  | TypedFailure<'forbidden', 'audit.access_forbidden'>
   | TypedFailure<'unavailable', 'audit.id_generation'>
   | TypedFailure<'internal', 'audit.persistence_invalid'>;
 

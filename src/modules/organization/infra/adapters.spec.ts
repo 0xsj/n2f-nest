@@ -98,7 +98,7 @@ describe('Organization in-memory adapter contract', () => {
     const store = new InMemoryOrganizationStore();
     const bus = new InMemoryEventBus();
     const published: ID[] = [];
-    bus.subscribe(async (event) => {
+    bus.subscribe('spec', async (event) => {
       published.push(event.id);
       return ok(undefined);
     });
@@ -136,7 +136,7 @@ describe('Organization in-memory adapter contract', () => {
     const store = new InMemoryOrganizationStore();
     const bus = new InMemoryEventBus();
     let publications = 0;
-    bus.subscribe(async () => {
+    bus.subscribe('spec', async () => {
       publications += 1;
       return publications === 2
         ? err(
@@ -181,7 +181,9 @@ describe('Organization in-memory adapter contract', () => {
       expiresAt: new Date('2026-09-29T00:00:00.000Z'),
     });
     if (!issued.ok) throw new Error(issued.error.message);
-    const accepted = issued.value.accept(new Date('2026-09-23T00:00:00.000Z'));
+    // Storage holds the invitation at its first version, as a reader would return it.
+    const stored = issued.value.saved();
+    const accepted = stored.accept(new Date('2026-09-23T00:00:00.000Z'));
     if (!accepted.ok) throw new Error(accepted.error.message);
     const membership = Membership.add({
       id: id('00000000-0000-7000-8000-000000000051'),
@@ -192,7 +194,7 @@ describe('Organization in-memory adapter contract', () => {
     });
     if (!membership.ok) throw new Error(membership.error.message);
 
-    store.addInvitation(issued.value);
+    store.addInvitation(stored);
     const context = work(
       'organization.invitation.accept',
       id('00000000-0000-7000-8000-000000000052'),
@@ -228,10 +230,10 @@ describe('Organization in-memory adapter contract', () => {
 
     expect(result).toEqual(ok(undefined));
     expect((await new InMemoryInvitationReader(store).findById(accepted.value.id))).toEqual(
-      ok(accepted.value),
+      ok(accepted.value.saved()),
     );
     expect((await new InMemoryMembershipReader(store).findById(membership.value.id))).toEqual(
-      ok(membership.value),
+      ok(membership.value.saved()),
     );
   });
 });

@@ -78,6 +78,7 @@ export class RevokeSession {
         session_id: revoked.value.id,
         status: revoked.value.status,
       },
+      { kind: 'identity', id: revoked.value.identityId },
     );
 
     if (!event.ok) {

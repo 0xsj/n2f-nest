@@ -19,7 +19,8 @@ type KnownOrganizationFailure =
       | 'organization.invitation_exists'
       | 'organization.membership.already_exists'
       | 'organization.membership_exists'
-      | 'organization.slug_taken'>
+      | 'organization.slug_taken'
+      | 'organization.stale_write'>
   | TypedFailure<'unavailable',
       | 'organization.id_generation'
       | 'organization.invitation.id_generation'
@@ -72,6 +73,7 @@ function knownFailure(error: Failure): KnownOrganizationFailure | undefined {
     case 'organization.membership.already_exists':
     case 'organization.membership_exists':
     case 'organization.slug_taken':
+    case 'organization.stale_write':
       return typedFailure('conflict', error.type, error.message, { fields: error.fields, cause: error });
     case 'organization.id_generation':
     case 'organization.invitation.id_generation':

@@ -1,0 +1,38 @@
+# PostgreSQL and NATS JetStream for the durable test suites and CI.
+#
+# The project name is deliberately distinct from any development stack, so
+# `make infra-up` never adopts another project's containers or volumes. Ports
+# default to the development ports; override them to run beside that stack:
+#   N2F_POSTGRES_PORT=17220 N2F_NATS_PORT=17222 N2F_NATS_MONITOR_PORT=17223 make infra-up
+name: n2f-nest-test
+
+services:
+  postgres:
+    image: postgres:18.6-alpine
+    environment:
+      POSTGRES_DB: n2f
+      POSTGRES_USER: n2f
+      POSTGRES_PASSWORD: n2f_local
+    ports:
+      - "127.0.0.1:${N2F_POSTGRES_PORT:-7220}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U n2f -d n2f"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    stop_grace_period: 10s
+
+  nats:
+    image: nats:2.14.6-alpine
+    command: ["-c", "/etc/nats/nats.conf"]
+    ports:
+      - "127.0.0.1:${N2F_NATS_PORT:-7222}:4222"
+      - "127.0.0.1:${N2F_NATS_MONITOR_PORT:-7223}:8222"
+    volumes:
+      - ./infra/nats/nats.conf:/etc/nats/nats.conf:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8222/healthz?js-enabled-only=true"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    stop_grace_period: 10s

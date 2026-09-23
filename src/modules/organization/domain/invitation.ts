@@ -6,6 +6,11 @@ import {
   type Result,
 } from '../../../shared/errors/index.js';
 import type { ID } from '../../../shared/id/index.js';
+import {
+  UNSAVED,
+  isStoredVersion,
+  type Version,
+} from '../../../shared/version/index.js';
 
 export const INVITATION_ROLES = Object.freeze(['admin', 'member'] as const);
 export type InvitationRole = (typeof INVITATION_ROLES)[number];
@@ -48,6 +53,7 @@ export type RestoreInvitationInput = Readonly<{
   expiresAt: Date;
   acceptedAt: Date | null;
   revokedAt: Date | null;
+  version: Version;
 }>;
 
 type InvitationState = Readonly<{
@@ -61,6 +67,7 @@ type InvitationState = Readonly<{
   expiresAt: Date;
   acceptedAt: Date | null;
   revokedAt: Date | null;
+  version: Version;
 }>;
 
 function validDate(value: Date): boolean {
@@ -118,6 +125,7 @@ export class Invitation {
         expiresAt: copyDate(input.expiresAt),
         acceptedAt: null,
         revokedAt: null,
+        version: UNSAVED,
       }),
     );
   }
@@ -132,7 +140,8 @@ export class Invitation {
       !validDate(input.updatedAt) ||
       !validDate(input.expiresAt) ||
       (input.acceptedAt !== null && !validDate(input.acceptedAt)) ||
-      (input.revokedAt !== null && !validDate(input.revokedAt))
+      (input.revokedAt !== null && !validDate(input.revokedAt)) ||
+      !isStoredVersion(input.version)
     ) {
       return err(
         invalid('invitation state is invalid', 'invitation.invalid_state'),
@@ -172,6 +181,7 @@ export class Invitation {
         acceptedAt:
           input.acceptedAt === null ? null : copyDate(input.acceptedAt),
         revokedAt: input.revokedAt === null ? null : copyDate(input.revokedAt),
+        version: input.version,
       }),
     );
   }
@@ -209,6 +219,16 @@ export class Invitation {
     return this.state.revokedAt === null
       ? null
       : copyDate(this.state.revokedAt);
+  }
+
+  /** The optimistic-concurrency token this state was loaded at. */
+  get version(): Version {
+    return this.state.version;
+  }
+
+  /** This state as storage holds it after a successful write. */
+  saved(): Invitation {
+    return new Invitation({ ...this.state, version: this.state.version + 1 });
   }
 
   isExpired(at: Date): boolean {

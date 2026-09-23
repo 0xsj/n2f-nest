@@ -1,6 +1,6 @@
 # ADR-001: Replace the legacy Signals persistence and event namespace
 
-**Status:** Accepted locally — PostgreSQL and NATS cutovers applied
+**Status:** Completed — namespace renamed, history squashed into baselines (2026-09-23)
 
 ## Context
 
@@ -161,3 +161,29 @@ predictable.
 - [Shared NATS adapter](../modules/src/shared/events/nats/README.md)
 - [0013 namespace rename draft](ADR-001-0013-namespace-rename.sql)
 - [Namespace verification SQL](ADR-001-namespace-verification.sql)
+
+## Addendum: migration baseline (2026-09-23)
+
+The rename left every new database replaying the old product's history:
+tables were created as `signals_*` and renamed by migration 0013, recorded in a
+`signals_migrations` ledger. With the hardening work the history reached 26
+migrations.
+
+That history is now squashed into one baseline per owning module (versions
+1–7, `migrations/baseline.sql` beside each module's adapters), recorded in
+`n2f_migrations`. Constraint and index names are unchanged, because adapters
+map them to domain failures.
+
+Existing databases are not rebuilt. `Database.migrate` adopts a database whose
+`signals_migrations` ledger holds exactly the 26-migration history (verified by
+the checksum of its final migration): it records the baselines as applied and
+drops the old ledger. `test/migration-baseline.integration.spec.ts` restores
+the legacy schema (`test/fixtures/legacy-schema-v26.sql`), adopts it, and
+proves its catalog is identical to a fresh baseline database. A database with
+only part of that history (for example one migrated by v1.0.8, which had 14
+migrations) is refused with `database.legacy_history` and must be reset; no
+such database was deployed.
+
+The SQL files kept beside this note document the original cutover and are no
+longer executed.
+

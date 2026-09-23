@@ -111,6 +111,8 @@ export class SubmitJob {
         status: job.value.status,
         max_attempts: job.value.maxAttempts,
       },
+      { kind: 'job', id: job.value.id },
+      job.value.organizationId,
     );
     if (!event.ok) return err(dependencyFailure(event.error, 'event.create'));
 

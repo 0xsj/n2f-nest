@@ -2,7 +2,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import * as ts from 'typescript';
 
-type ViolationKind = 'catch' | 'throw';
+type ViolationKind = 'catch' | 'throw' | 'promise-reject' | 'promise-catch' | 'promise-executor';
 
 type Violation = {
   readonly file: string;
@@ -119,7 +119,38 @@ for (const file of files) {
       });
     }
 
+    // Rejected promises are exceptions by another name: they bypass the
+    // Result contract exactly as `throw` does.
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+      const method = node.expression.name.text;
+      const receiver = node.expression.expression;
+      if (method === 'reject' && ts.isIdentifier(receiver) && receiver.text === 'Promise') {
+        record(node, 'promise-reject');
+      } else if (method === 'catch') {
+        record(node, 'promise-catch');
+      }
+    }
+
+    // A hand-built promise can reject from its executor.
+    if (
+      ts.isNewExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === 'Promise'
+    ) {
+      record(node, 'promise-executor');
+    }
+
     ts.forEachChild(node, visit);
+  }
+
+  function record(node: ts.Node, kind: ViolationKind): void {
+    const position = node.getStart(sourceFile);
+    violations.push({
+      file,
+      line: sourceFile.getLineAndCharacterOfPosition(position).line + 1,
+      kind,
+      source: sourceLine(source, position),
+    });
   }
 
   visit(sourceFile);
@@ -139,6 +170,6 @@ if (violations.length > 0) {
   process.exitCode = 1;
 } else {
   console.log(
-    `Error-boundary architecture check passed: ${files.length} core files contain no throw statements or catch clauses.`,
+    `Error-boundary architecture check passed: ${files.length} core files contain no throw, catch or promise rejection.`,
   );
 }

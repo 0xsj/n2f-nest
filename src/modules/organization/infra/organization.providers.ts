@@ -31,8 +31,6 @@ import {
   type OrganizationWriter,
 } from '../app/index.js';
 import {
-  IdentityCurrentActorReader,
-  IdentityReferenceReaderAdapter,
   InMemoryInvitationReader,
   InMemoryInvitationAcceptanceWriter,
   InMemoryInvitationWriter,
@@ -52,9 +50,11 @@ import {
   PostgresOrganizationWriter,
 } from './postgres/index.js';
 
+import { ORGANIZATION_REQUIRES } from './requires.js';
+
 const PORTS = {
-  currentActorReader: Symbol('organization.currentActorReader'),
-  identityReferenceReader: Symbol('organization.identityReferenceReader'),
+  currentActorReader: ORGANIZATION_REQUIRES.currentActor,
+  identityReferenceReader: ORGANIZATION_REQUIRES.identityReferences,
   membershipReader: Symbol('organization.membershipReader'),
   membershipWriter: Symbol('organization.membershipWriter'),
   invitationReader: Symbol('organization.invitationReader'),
@@ -78,22 +78,12 @@ export const organizationProviders: Provider[] = [
   },
   InMemoryOrganizationStore,
   InMemoryOrganizationWriter,
-  IdentityCurrentActorReader,
-  IdentityReferenceReaderAdapter,
   InMemoryMembershipReader,
   InMemoryMembershipWriter,
   InMemoryInvitationReader,
   InMemoryInvitationWriter,
   InMemoryInvitationAcceptanceWriter,
   InMemoryOrganizationReader,
-  {
-    provide: PORTS.currentActorReader,
-    useExisting: IdentityCurrentActorReader,
-  },
-  {
-    provide: PORTS.identityReferenceReader,
-    useExisting: IdentityReferenceReaderAdapter,
-  },
   {
     provide: PORTS.membershipReader,
     useFactory: (

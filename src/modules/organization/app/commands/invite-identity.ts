@@ -175,6 +175,8 @@ export class InviteIdentity {
         role: invitation.value.role,
         expires_at: invitation.value.expiresAt.toISOString(),
       },
+      { kind: 'invitation', id: invitation.value.id },
+      invitation.value.organizationId,
     );
     if (!event.ok) return err(dependencyFailure(event.error, 'event.create'));
 

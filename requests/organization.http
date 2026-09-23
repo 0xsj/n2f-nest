@@ -4,8 +4,8 @@
 @baseUrl = http://localhost:7300
 @sessionToken = replace-with-session-token
 @targetIdentityId = replace-with-target-identity-id
-@organizationName = Signals Artist Agency
-@organizationSlug = signals-agency
+@organizationName = Example Agency
+@organizationSlug = example-agency
 
 ### List organizations for the current identity
 GET {{baseUrl}}/organizations

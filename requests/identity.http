@@ -1,5 +1,5 @@
 # Kulala / .http request file for the Identity vertical slice.
-# Run the backend first: PORT=7300 bun run start:dev
+# Run the backend first: N2F_DEV_ENDPOINTS=true PORT=7300 bun run start:dev
 #
 # The in-memory adapter resets when the backend restarts. Run these requests
 # from top to bottom and copy response values into the variables below.
@@ -7,7 +7,6 @@
 @baseUrl = http://localhost:7300
 @email = demo@example.com
 @password = correct-horse-7
-@identityId = replace-with-identity-id
 @challengeId = replace-with-challenge-id
 @verificationToken = replace-with-verification-token
 @sessionToken = replace-with-session-token
@@ -21,17 +20,20 @@ Content-Type: application/json
   "password": "{{password}}"
 }
 
-### Issue an email verification challenge
-# Copy identityId from the registration response above.
+### Read the verification mail (development mailbox)
+# Sign-up answers 202 alike for new and taken emails; the link arrives by mail.
+# Copy challenge and token from the /verify?challenge=…&token=… link.
+GET {{baseUrl}}/dev/mail?to={{email}}
+
+### Mail a new verification link (answers 202 for any email)
 POST {{baseUrl}}/identity/verification-challenges
 Content-Type: application/json
 
 {
-  "identityId": "{{identityId}}"
+  "email": "{{email}}"
 }
 
 ### Verify the identity
-# Copy challengeId and token from the challenge response above.
 POST {{baseUrl}}/identity/verify
 Content-Type: application/json
 

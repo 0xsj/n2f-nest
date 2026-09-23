@@ -1,5 +1,11 @@
-import { Injectable, Logger, Module, type OnModuleInit } from '@nestjs/common';
-import { IdentityModule } from '../identity/identity.module.js';
+import {
+  Injectable,
+  Logger,
+  Module,
+  type DynamicModule,
+  type ModuleMetadata,
+  type OnModuleInit,
+} from '@nestjs/common';
 import { PlatformEventsModule } from '../../platform/events/events.module.js';
 import { PlatformHttpModule } from '../../platform/http/http.module.js';
 import { organizationProviders } from './infra/organization.providers.js';
@@ -15,10 +21,23 @@ class OrganizationModuleStartup implements OnModuleInit {
   }
 }
 
-@Module({
-  imports: [IdentityModule, PlatformEventsModule, PlatformHttpModule],
-  controllers: [OrganizationController],
-  providers: [OrganizationModuleStartup, OrganizationHttpWork, ...organizationProviders],
-  exports: [GetOrganizationMembership],
-})
-export class OrganizationModule {}
+export type OrganizationModuleOptions = Readonly<{
+  /**
+   * Modules that provide and export every ORGANIZATION_REQUIRES token. The
+   * composition root chooses them; this module never names its providers.
+   */
+  requires: NonNullable<ModuleMetadata['imports']>;
+}>;
+
+@Module({})
+export class OrganizationModule {
+  static register(options: OrganizationModuleOptions): DynamicModule {
+    return {
+      module: OrganizationModule,
+      imports: [PlatformEventsModule, PlatformHttpModule, ...options.requires],
+      controllers: [OrganizationController],
+      providers: [OrganizationModuleStartup, OrganizationHttpWork, ...organizationProviders],
+      exports: [GetOrganizationMembership],
+    };
+  }
+}

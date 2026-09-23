@@ -6,6 +6,11 @@ import {
   type Result,
 } from '../../../shared/errors/index.js';
 import type { ID } from '../../../shared/id/index.js';
+import {
+  UNSAVED,
+  isStoredVersion,
+  type Version,
+} from '../../../shared/version/index.js';
 
 export const MEMBERSHIP_ROLES = Object.freeze([
   'owner',
@@ -50,6 +55,7 @@ export type RestoreMembershipInput = Readonly<{
   createdAt: Date;
   updatedAt: Date;
   revokedAt: Date | null;
+  version: Version;
 }>;
 
 type MembershipState = Readonly<{
@@ -61,6 +67,7 @@ type MembershipState = Readonly<{
   createdAt: Date;
   updatedAt: Date;
   revokedAt: Date | null;
+  version: Version;
 }>;
 
 function validDate(value: Date): boolean {
@@ -110,6 +117,7 @@ export class Membership {
         createdAt,
         updatedAt: copyDate(createdAt),
         revokedAt: null,
+        version: UNSAVED,
       }),
     );
   }
@@ -122,7 +130,8 @@ export class Membership {
       !MEMBERSHIP_STATUSES.includes(input.status) ||
       !validDate(input.createdAt) ||
       !validDate(input.updatedAt) ||
-      (input.revokedAt !== null && !validDate(input.revokedAt))
+      (input.revokedAt !== null && !validDate(input.revokedAt)) ||
+      !isStoredVersion(input.version)
     ) {
       return err(
         invalid('membership state is invalid', 'membership.invalid_state'),
@@ -160,6 +169,7 @@ export class Membership {
         createdAt: copyDate(input.createdAt),
         updatedAt: copyDate(input.updatedAt),
         revokedAt: input.revokedAt === null ? null : copyDate(input.revokedAt),
+        version: input.version,
       }),
     );
   }
@@ -196,6 +206,16 @@ export class Membership {
     return this.state.revokedAt === null
       ? null
       : copyDate(this.state.revokedAt);
+  }
+
+  /** The optimistic-concurrency token this state was loaded at. */
+  get version(): Version {
+    return this.state.version;
+  }
+
+  /** This state as storage holds it after a successful write. */
+  saved(): Membership {
+    return new Membership({ ...this.state, version: this.state.version + 1 });
   }
 
   changeRole(role: unknown, at: Date): Result<Membership, MembershipFailure> {

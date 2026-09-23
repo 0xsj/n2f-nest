@@ -37,6 +37,7 @@ describe('AuditEntry', () => {
       recordedAt: new Date('2026-09-19T00:00:01.000Z'),
       work: work.value,
       subject: { kind: 'identity', id: subjectId.value },
+      tenant: null,
     });
 
     expect(result.ok).toBe(true);
@@ -57,6 +58,7 @@ describe('AuditEntry', () => {
       recordedAt: new Date(),
       work: work.value,
       subject: null,
+      tenant: null,
     });
 
     expect(result.ok).toBe(false);

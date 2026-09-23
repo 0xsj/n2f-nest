@@ -124,8 +124,11 @@ The current routes are intentionally small:
 | `POST` | `/identity/logout` | revoke the current session |
 
 The challenge endpoint returns the token only because this is a local
-integration example. A real transport would hand it to an email or messaging
-adapter and would not include it in the API response.
+integration example. Returning it proves nothing about mailbox ownership: anyone
+holding an `identityId` from registration could verify an address they do not
+control. The endpoint therefore answers `404` unless `N2F_DEV_ENDPOINTS=true`.
+A real transport would hand the token to an email or messaging adapter and
+would not include it in the API response.
 
 Request work is opened with anonymous attribution and the `n2f-nest-http`
 service executor. The process-level request context carries the validated

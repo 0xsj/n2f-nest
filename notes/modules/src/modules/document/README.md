@@ -114,6 +114,24 @@ the owner/admin policy check through Organization, then uses exported module
 application commands. It does not reach into either module's repositories or
 domain objects.
 
+## Processing runs
+
+A document records the processing run it waits on (`processingRun`, an opaque
+reference the workflow sets to the job ID) and the latest attempt applied
+(`processingAttempt`). `beginProcessing(at, run)` starts or replaces a run;
+`applyProcessingOutcome` applies `retrying`, `succeeded` or `failed` only to
+the current run and only for an attempt not older than the one applied.
+Everything else is stale and leaves the document unchanged: outcomes of an
+earlier run, older attempts delivered late, repeats, outcomes after
+`processed`, and anything after archiving. A failed job canceled afterwards
+keeps its original failure code.
+
+Stale outcomes are expected, not errors, because event delivery is at least
+once and not strictly ordered. Returning them as failures made consumers retry
+events that could never apply until they were dead-lettered. The rules are
+specified in `domain/document.spec.ts` (processing runs) and exercised end to
+end in `test/document-processing.integration.spec.ts`.
+
 ## Next decisions
 
 - Should documents be visible to all organization members or have explicit

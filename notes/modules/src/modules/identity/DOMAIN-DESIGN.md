@@ -6,11 +6,12 @@ mechanisms remain outside the domain.
 
 ## Origin
 
-This note records the first domain slice built while restarting the Signals
-backend from a clean NestJS scaffold. The design follows the Signals product
-vision and the agreed modular-monolith boundary:
+This note records the first domain slice built while starting this backend
+from a clean NestJS scaffold. The design follows the agreed modular-monolith
+boundary:
 
-- a fan profile is not automatically an authenticated account
+- a person a product knows about (a customer, contact or member record) is not
+  automatically an authenticated account
 - organization membership is owned by the Organization module
 - Identity owns authentication state, not product activity
 - domain code must remain portable if a module later moves behind a remote
@@ -28,18 +29,18 @@ Identity answers:
 
 That question is intentionally narrower than:
 
-> What do we know about this fan?
+> What does the product know about this person?
 
-The second question belongs to fan profile and relationship domains. This
-distinction lets Signals support anonymous or imported fan activity before a
-fan chooses to create or claim an authenticated Identity.
+The second question belongs to a product's own profile and relationship
+domains. The distinction lets a product record anonymous or imported activity
+for a person before that person creates or claims an authenticated Identity.
 
 ## Ubiquitous language
 
 ### Identity
 
 An Identity is the stable authentication subject for an actor. It has its own
-stable ID and lifecycle state. It is not a fan profile, organization, role,
+stable ID and lifecycle state. It is not a product profile, organization, role,
 credential, session or access token.
 
 The first implementation represented the Identity lifecycle only. The next
@@ -372,9 +373,9 @@ The next tests should be added only when the next behavior is designed:
 
 ## What this design deliberately does not decide yet
 
-- whether every fan can self-register
+- whether every end user can self-register
 - whether email verification is mandatory before all authentication methods
-- whether organization users and fans use identical credential policies
+- whether organization users and end users share credential policies
 - whether email addresses are modeled as credentials, contact methods or both
 - how password strength and breached-password policy are enforced
 - session cookie versus bearer-token transport

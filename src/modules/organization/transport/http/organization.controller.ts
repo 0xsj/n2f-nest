@@ -11,6 +11,7 @@ import {
   Patch,
   Post,
 } from '@nestjs/common';
+import { perClient, RateLimit } from '../../../../platform/ratelimit/index.js';
 import {
   err,
   failure,
@@ -115,6 +116,8 @@ function respond<T>(result: Result<T, Failure>): T {
   );
 }
 
+/** Per-client bound on this controller's requests; see platform/ratelimit. */
+@RateLimit(perClient('organization', 120, 60_000))
 @Controller('organizations')
 export class OrganizationController {
   constructor(
@@ -146,6 +149,8 @@ export class OrganizationController {
     }));
   }
 
+  // Creating organizations is the one write that mints new tenants.
+  @RateLimit(perClient('organization.create', 20, 10 * 60_000))
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async createOrganization(

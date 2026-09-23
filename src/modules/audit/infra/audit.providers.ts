@@ -11,6 +11,8 @@ import {
 } from '../../../platform/runtime/index.js';
 import {
   ListAuditEntries,
+  ListOrganizationAuditEntries,
+  type AuditOrganizationAccessReader,
   RecordAuditEvent,
 } from '../app/index.js';
 import type {
@@ -26,6 +28,8 @@ import {
   PostgresAuditEntryReader,
   PostgresAuditEntryWriter,
 } from './postgres/index.js';
+
+import { AUDIT_REQUIRES } from './requires.js';
 
 const PORTS = {
   reader: Symbol('audit.entryReader'),
@@ -69,6 +73,12 @@ export const auditProviders: Provider[] = [
     useFactory: (clock: SystemClock, ids: V7, writer: AuditEntryWriter) =>
       new RecordAuditEvent({ clock, ids, writer }),
     inject: [SystemClock, V7, PORTS.writer],
+  },
+  {
+    provide: ListOrganizationAuditEntries,
+    useFactory: (access: AuditOrganizationAccessReader, entries: AuditEntryReader) =>
+      new ListOrganizationAuditEntries({ access, entries }),
+    inject: [AUDIT_REQUIRES.organizationAccess, PORTS.reader],
   },
   {
     provide: ListAuditEntries,

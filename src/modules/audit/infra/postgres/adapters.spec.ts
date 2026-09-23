@@ -58,6 +58,7 @@ function entry() {
     eventType: 'identity.registered.v1',
     occurredAt,
     recordedAt,
+    tenant: null,
     work: work(),
     subject,
   });
@@ -114,6 +115,7 @@ function auditRow() {
     work_context: encodeWork(value.provenance),
     subject_kind: value.subject?.kind ?? null,
     subject_id: value.subject?.id ?? null,
+    tenant_id: value.tenant,
   };
 }
 

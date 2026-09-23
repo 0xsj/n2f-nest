@@ -143,6 +143,24 @@ function workOut(work: provenance.WorkContext): unknown {
   };
 }
 
+/**
+ * What an event is about, named by the module that produced it (for example
+ * `{ kind: 'document', id }`). Consumers such as Audit read the subject from
+ * the envelope instead of interpreting another module's payload.
+ */
+export type EventSubject = Readonly<{ kind: string; id: ID }>;
+
+const SUBJECT_KIND = /^[a-z][a-z0-9_.-]{0,63}$/;
+
+function subjectIn(value: unknown): EventSubject | undefined {
+  if (value === undefined) return undefined;
+  const input = object(value);
+  keys(input, ['kind', 'id']);
+  const kind = string(input.kind);
+  if (!SUBJECT_KIND.test(kind)) throw new AppError(invalid());
+  return Object.freeze({ kind, id: valueOf(parse(string(input.id))) });
+}
+
 export class Envelope {
   #raw: Uint8Array;
 
@@ -152,6 +170,8 @@ export class Envelope {
     readonly work: provenance.WorkContext,
     readonly type: string,
     readonly occurredAtMs: number,
+    readonly subject: EventSubject | undefined,
+    readonly tenant: ID | undefined,
   ) {
     this.#raw = raw.slice();
     Object.freeze(this);
@@ -175,6 +195,13 @@ export class Envelope {
     occurredAtMs: number,
     work: provenance.WorkContext,
     payload: Record<string, unknown>,
+    subject?: EventSubject,
+    /**
+     * The tenant (organization) the event belongs to, when it belongs to one.
+     * Consumers such as Audit scope what they keep by it without reading the
+     * payload.
+     */
+    tenant?: ID,
   ): Result<Envelope, Failure> {
     try {
       return Envelope.decode(
@@ -186,6 +213,8 @@ export class Envelope {
             occurred_at_ms: occurredAtMs,
             work: workOut(work),
             payload,
+            ...(subject === undefined ? {} : { subject }),
+            ...(tenant === undefined ? {} : { tenant }),
           }),
         ),
       );
@@ -203,8 +232,12 @@ export class Envelope {
       const input = object(
         JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(raw)),
       );
+      // `subject` and `tenant` are optional so envelopes written before they
+      // existed decode.
+      const expectedKeys =
+        6 + (Object.hasOwn(input, 'subject') ? 1 : 0) + (Object.hasOwn(input, 'tenant') ? 1 : 0);
       if (
-        Object.keys(input).length !== 6 ||
+        Object.keys(input).length !== expectedKeys ||
         !['v', 'id', 'type', 'occurred_at_ms', 'work', 'payload'].every(
           (key) => Object.hasOwn(input, key),
         ) ||
@@ -223,8 +256,16 @@ export class Envelope {
       object(input.payload);
       const id = valueOf(parse(string(input.id)));
       const work = workIn(input.work);
+      const subject = subjectIn(input.subject);
+      const tenant = input.tenant === undefined ? undefined : valueOf(parse(string(input.tenant)));
       const normalized = Buffer.from(
-        JSON.stringify({ ...input, id, work: workOut(work) }),
+        JSON.stringify({
+          ...input,
+          id,
+          work: workOut(work),
+          ...(subject === undefined ? {} : { subject }),
+          ...(tenant === undefined ? {} : { tenant }),
+        }),
       );
 
       return normalized.byteLength > 65536
@@ -236,6 +277,8 @@ export class Envelope {
               work,
               input.type,
               input.occurred_at_ms,
+              subject,
+              tenant,
             ),
           );
     } catch {
@@ -245,6 +288,20 @@ export class Envelope {
 }
 
 export { assertEventWork } from './provenance.js';
+export {
+  CONSUMER_NAME,
+  type Delivery,
+  type EventHandler,
+  type Inbox,
+  type InboxBacklog,
+} from './inbox.js';
+export { InMemoryInbox } from './in-memory-inbox.js';
+export {
+  DEFAULT_RETRY,
+  exhausted,
+  retryDelay,
+  type RetryPolicy,
+} from './retry.js';
 
 export type Receipt = {
   eventId: ID;

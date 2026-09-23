@@ -9,12 +9,16 @@ import {
 import type { Envelope, Receipt } from '../../shared/events/index.js';
 import type { EventBus, EventSubscriber } from './event-bus.js';
 
-/** Process-local Publisher used only until an outbox/NATS dispatcher is wired. */
+/**
+ * Synchronous bus for unit tests: `publish` runs every subscriber inline.
+ * The application uses EventDelivery, which never runs subscribers inside a
+ * publisher's write.
+ */
 @Injectable()
 export class InMemoryEventBus implements EventBus {
   readonly #subscribers = new Set<EventSubscriber>();
 
-  subscribe(subscriber: EventSubscriber): () => void {
+  subscribe(_consumer: string, subscriber: EventSubscriber): () => void {
     this.#subscribers.add(subscriber);
     return () => this.#subscribers.delete(subscriber);
   }

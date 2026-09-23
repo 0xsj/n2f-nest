@@ -21,3 +21,10 @@ export {
   type SubmitWorkflowJobDependencies,
   type SubmitWorkflowJobResult,
 } from './submit-workflow-job.js';
+export {
+  ExpireStaleJobs,
+  JOB_TIMED_OUT,
+  type ExpireStaleJobsCommand,
+  type ExpireStaleJobsDependencies,
+  type ExpireStaleJobsResult,
+} from './expire-stale-jobs.js';

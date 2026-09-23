@@ -26,6 +26,8 @@ export type RecordAuditEntryInput = Readonly<{
   recordedAt: Date;
   work: WorkContext;
   subject: AuditSubject | null;
+  /** The organization the audited event belongs to, if any. */
+  tenant: ID | null;
 }>;
 
 export type RestoreAuditEntryInput = Readonly<{
@@ -36,6 +38,8 @@ export type RestoreAuditEntryInput = Readonly<{
   recordedAt: Date;
   work: WorkSnapshot;
   subject: AuditSubject | null;
+  /** The organization the audited event belongs to, if any. */
+  tenant: ID | null;
 }>;
 
 export type AuditEntryFailureType =
@@ -54,6 +58,8 @@ type AuditEntryState = Readonly<{
   recordedAt: Date;
   work: WorkSnapshot;
   subject: AuditSubject | null;
+  /** The organization the audited event belongs to, if any. */
+  tenant: ID | null;
 }>;
 
 function validDate(value: Date): boolean {
@@ -137,6 +143,7 @@ export class AuditEntry {
         work,
         subject:
           input.subject === null ? null : Object.freeze({ ...input.subject }),
+        tenant: input.tenant ?? null,
       }),
     );
   }
@@ -180,6 +187,10 @@ export class AuditEntry {
 
   get provenance(): WorkSnapshot {
     return copyWork(this.state.work);
+  }
+
+  get tenant(): ID | null {
+    return this.state.tenant;
   }
 
   get subject(): AuditSubject | null {

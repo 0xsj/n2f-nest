@@ -1,13 +1,18 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { ok, type Failure, type Result } from '../../../../shared/errors/index.js';
+import { err, ok, type Failure, type Result } from '../../../../shared/errors/index.js';
 import { assertEventWork } from '../../../../shared/events/index.js';
 import { EVENT_BUS, type EventBus } from '../../../../platform/events/event-bus.js';
 import type {
   InvitationAcceptanceCommit,
   InvitationAcceptanceWriter,
 } from '../../app/index.js';
+import { acceptanceConflict, acceptedMembershipExists } from '../failures.js';
 import { InMemoryOrganizationStore } from './store.js';
 
+/**
+ * Mirrors the PostgreSQL writer: only a pending invitation at the version the
+ * command read can be accepted, and the identity may hold one membership.
+ */
 @Injectable()
 export class InMemoryInvitationAcceptanceWriter implements InvitationAcceptanceWriter {
   constructor(
@@ -24,25 +29,28 @@ export class InMemoryInvitationAcceptanceWriter implements InvitationAcceptanceW
     }
 
     const previousInvitation = this.store.invitationById(input.invitation.id);
-    const previousMembership = this.store.membershipById(input.membership.id);
-    if (!previousInvitation || previousMembership) {
-      return {
-        ok: false,
-        error: {
-          kind: 'conflict',
-          message: 'invitation acceptance state already exists',
-          type: 'organization.invitation.acceptance_conflict',
-        },
-      };
+    if (
+      !previousInvitation ||
+      previousInvitation.status !== 'pending' ||
+      previousInvitation.version !== input.invitation.version
+    ) {
+      return err(acceptanceConflict());
     }
+    const membership = input.membership;
+    const duplicate =
+      this.store.membershipById(membership.id) !== undefined ||
+      this.store
+        .membershipsForAnyStatusForIdentity(membership.identityId)
+        .some((candidate) => candidate.organizationId === membership.organizationId);
+    if (duplicate) return err(acceptedMembershipExists());
 
-    this.store.replaceInvitation(input.invitation);
-    this.store.addMembership(input.membership);
+    this.store.replaceInvitation(input.invitation.saved());
+    this.store.addMembership(membership.saved());
     for (const event of input.events) {
       const published = await this.events.publish(event, input.signal);
       if (!published.ok) {
         this.store.replaceInvitation(previousInvitation);
-        this.store.removeMembership(input.membership.id);
+        this.store.removeMembership(membership.id);
         return published;
       }
     }

@@ -138,6 +138,9 @@ describe('Document PostgreSQL adapter contract', () => {
         created_at: document.createdAt,
         updated_at: document.updatedAt,
         archived_at: document.archivedAt,
+        processing_run: document.processingRun,
+        processing_attempt: document.processingAttempt,
+        version: 1,
       },
     ]);
 
